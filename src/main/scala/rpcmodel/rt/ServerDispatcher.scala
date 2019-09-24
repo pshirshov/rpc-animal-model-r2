@@ -15,11 +15,11 @@ trait ServerHook[F[+_, +_], C, WCtxIn, WValue] extends ServerContext[F, C, WCtxI
     next(r)
   }
 
-  def onDecode[T](r: Req, c: C, next: (Req, C) => F[ServerDispatcherError, T]): F[ServerDispatcherError, T] = {
+  def onDecode[T: IRTCodec[*, WValue]](r: Req, c: C, next: (Req, C) => F[ServerDispatcherError, T]): F[ServerDispatcherError, T] = {
     next(r, c)
   }
 
-  def onEncode[T, B](r: Req, c: C, b: B, t: T, next: (Req, C, B, T) => F[ServerDispatcherError, WValue]): F[ServerDispatcherError, WValue] = {
+  def onEncode[T : IRTCodec[*, WValue], B: IRTCodec[*, WValue]](r: Req, c: C, b: B, t: T, next: (Req, C, B, T) => F[ServerDispatcherError, WValue]): F[ServerDispatcherError, WValue] = {
     next(r, c, b, t)
   }
 }
@@ -59,7 +59,7 @@ abstract class DispatherBaseImpl[F[+_, +_] : BIOError, C, WCtxIn, WValue]
     hook.onDecode(r, c, (req, _) => F.fromEither(codec.decode(req.value).left.map(f => ServerCodecFailure(f))))
   }
 
-  protected final def doEncode[T : IRTCodec[*, WValue], B](r: Req, c: C, b: B, t: T): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
+  protected final def doEncode[T : IRTCodec[*, WValue], B: IRTCodec[*, WValue]](r: Req, c: C, b: B, t: T): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
     val codec = implicitly[IRTCodec[T, WValue]]
     for {
       out <- hook.onEncode(r, c, b, t, (_: Req, _: C, _: B, t: T) => F.pure(codec.encode(t)))
