@@ -1,14 +1,14 @@
 package rpcmodel.rt
 
 import izumi.functional.bio.BIOError
-import rpcmodel.rt.ServerDispatcher.{ClientDispatcherError, ClientResponse, CodecFailure1, MethodId}
+import rpcmodel.rt.ServerDispatcher.{ClientDispatcherError, ClientResponse, ClientCodecFailure, MethodId}
 
 trait ClientHook[F[_, _], C, WCtxIn, WValue] {
   def onCtxDecode(res: ClientResponse[WCtxIn, WValue], next: ClientResponse[WCtxIn, WValue] => F[ClientDispatcherError, C]): F[ClientDispatcherError, C] = {
     next(res)
   }
 
-  def onDecode[E, A](res: ClientResponse[WCtxIn, WValue], c: C, next: (C, ClientResponse[WCtxIn, WValue]) => F[E, A]): F[E, A] = {
+  def onDecode[A : IRTCodec[*, WValue]](res: ClientResponse[WCtxIn, WValue], c: C, next: (C, ClientResponse[WCtxIn, WValue]) => F[ClientDispatcherError, A]): F[ClientDispatcherError, A] = {
     next(c, res)
   }
 }
@@ -30,7 +30,7 @@ abstract class ClientTransportBaseImpl[F[+_, +_] : BIOError, C, WCtxIn, WValue] 
   protected final def doDecode[V : IRTCodec[*, WValue]](r: ClientResponse[WCtxIn, WValue], c: C): F[ClientDispatcherError, V] = {
     val codecRes = implicitly[IRTCodec[V, WValue]]
 
-    hook.onDecode(r, c, (_, r) => F.fromEither(codecRes.decode(r.value).left.map(f => CodecFailure1(f))))
+    hook.onDecode(r, c, (_, r) => F.fromEither(codecRes.decode(r.value).left.map(f => ClientCodecFailure(f))))
 
   }
 }

@@ -56,7 +56,7 @@ abstract class DispatherBaseImpl[F[+_, +_] : BIOError, C, WCtxIn, WValue]
 
   protected final def doDecode[V : IRTCodec[*, WValue]](r: Req, c: C): F[ServerDispatcherError, V] = {
     val codec = implicitly[IRTCodec[V, WValue]]
-    hook.onDecode(r, c, (req, _) => F.fromEither(codec.decode(req.value).left.map(f => CodecFailure(f))))
+    hook.onDecode(r, c, (req, _) => F.fromEither(codec.decode(req.value).left.map(f => ServerCodecFailure(f))))
   }
 
   protected final def doEncode[T : IRTCodec[*, WValue], B](r: Req, c: C, b: B, t: T): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
@@ -70,7 +70,6 @@ abstract class DispatherBaseImpl[F[+_, +_] : BIOError, C, WCtxIn, WValue]
 }
 
 object ServerDispatcher {
-  //case class ClientRequest[C, V](c: C, value: V, methodId: MethodId)
   case class ClientResponse[WCtxIn, WValue](c: WCtxIn, value: WValue)
 
   case class ServerWireRequest[WCtxIn, WValue](c: WCtxIn, value: WValue)
@@ -78,12 +77,12 @@ object ServerDispatcher {
 
   sealed trait ServerDispatcherError
   case class MethodHandlerMissing(methodId: MethodId) extends ServerDispatcherError
-  case class CodecFailure(failures: List[IRTCodecFailure]) extends ServerDispatcherError
+  case class ServerCodecFailure(failures: List[IRTCodecFailure]) extends ServerDispatcherError
 
   sealed trait ClientDispatcherError
   case class UnknownException(t: Throwable) extends ClientDispatcherError
   case class ServerError(s: ServerDispatcherError) extends ClientDispatcherError
-  case class CodecFailure1(failures: List[IRTCodecFailure]) extends ClientDispatcherError
+  case class ClientCodecFailure(failures: List[IRTCodecFailure]) extends ClientDispatcherError
 
   case class ClientDispatcherException(error: ClientDispatcherError) extends RuntimeException
 
@@ -92,7 +91,6 @@ object ServerDispatcher {
   }
   object RPCResult {
     import io.circe.{Decoder, Encoder}
-    import io.circe.generic.auto._
     import io.circe.syntax._
     val left = "left"
     val right = "right"

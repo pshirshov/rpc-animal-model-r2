@@ -2,7 +2,7 @@ import io.circe._
 import org.scalatest.WordSpec
 import rpcmodel.generated.{CalcClientDispatcher, CalcCodecs, CalcCodecsCirceJson, CalcServerDispatcher}
 import rpcmodel.rt.ServerDispatcher._
-import rpcmodel.rt.{ClientHook, ClientTransport, CtxDec, ServerDispatcher}
+import rpcmodel.rt.{ClientHook, ClientTransport, CtxDec, IRTCodec, ServerDispatcher}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
 import zio.internal.{Platform, PlatformLive}
@@ -47,7 +47,7 @@ class TransportModelTest extends WordSpec {
         codecs,
         transport,
         new ClientHook[IO, ClientCtx, Map[String, String], Json] {
-          override def onDecode[E, A](res: ClientResponse[Map[String, String], Json], c: ClientCtx, next: (ClientCtx, ClientResponse[Map[String, String], Json]) => IO[E, A]): IO[E, A] = {
+          override def onDecode[A: IRTCodec[*, Json]](res: ClientResponse[Map[String, String], Json], c: ClientCtx, next: (ClientCtx, ClientResponse[Map[String, String], Json]) => IO[ClientDispatcherError, A]): IO[ClientDispatcherError, A] = {
             println(s"Client hook: ${res.value}")
             super.onDecode(res, c, next)
           }
