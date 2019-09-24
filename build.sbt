@@ -10,6 +10,16 @@ libraryDependencies in ThisBuild += "dev.zio" %% "zio" % "1.0.0-RC12-1"
 
 libraryDependencies in ThisBuild += "io.7mind.izumi" %% "fundamentals-bio" % "0.9.5-M11"
 
+//libraryDependencies in ThisBuild += "com.lihaoyi" %% "upickle" % "0.7.5"
+
+val circeVersion = "0.12.1"
+
+libraryDependencies in ThisBuild ++= Seq(
+  "io.circe" %% "circe-core",
+  "io.circe" %% "circe-generic",
+  "io.circe" %% "circe-parser"
+).map(_ % circeVersion)
+
 addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")
 
 scalacOptions ++= Seq(

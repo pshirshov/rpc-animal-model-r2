@@ -3,8 +3,15 @@ package rpcmodel.generated
 
 
 object ICalc {
+  import io.circe.{Decoder, Encoder}
+  import io.circe.generic.semiauto._
+
   sealed trait Err
   case class ZeroDivisionError() extends Err
+  object ZeroDivisionError {
+    implicit val e: Encoder[ZeroDivisionError] = deriveEncoder
+    implicit val d: Decoder[ZeroDivisionError] = deriveDecoder
+  }
 
   trait Server[F[_, _], Ctx] {
     def sum(c: Ctx, a: Int, b: Int): F[Nothing, Int]

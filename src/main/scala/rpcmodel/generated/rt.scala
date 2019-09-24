@@ -1,5 +1,6 @@
 package rpcmodel.generated
 
+import io.circe.{Decoder, Encoder}
 import izumi.functional.bio.{BIO, BIOMonadError, BIOPanic}
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
@@ -17,9 +18,8 @@ trait CalcCodecs[WValue] {
 
   implicit def codec_DivOutputError: IRTCodec[ZeroDivisionError, WValue]
 
-  implicit def codec_Output[B: IRTCodec[*, WValue], G: IRTCodec[*, WValue]]: IRTCodec[RPCResult[B, G], WValue]
-
-  implicit def codec_OutputN[G: IRTCodec[*, WValue]]: IRTCodec[RPCResult[Nothing, G], WValue]
+  //implicit def codec_Output[B: IRTCodec[*, WValue], G: IRTCodec[*, WValue]]: IRTCodec[RPCResult[B, G], WValue]
+  implicit def codec_Output[B: Encoder : Decoder, G: Encoder : Decoder]: IRTCodec[RPCResult[B, G], WValue]
 }
 
 class CalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WValue]
@@ -27,7 +27,7 @@ class CalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WValue]
   server: ICalc.Server[F, C],
   ctxdec: CtxDec[F, ServerDispatcherError, WCtxIn, C],
   codecs: CalcCodecs[WValue],
-  override val hook: ServerHook[F, C, WCtxIn, WValue] = ServerHook.nothing,
+  override val hook: ServerHook[F, C, WCtxIn, WValue] = ServerHook.nothing[F, C, WCtxIn, WValue],
 ) extends DispatherBaseImpl[F, C, WCtxIn, WValue] {
 
   import BIO._
@@ -67,7 +67,7 @@ class CalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
   ctxdec: CtxDec[F, ClientDispatcherError, WCtxIn, C],
   codecs: CalcCodecs[WValue],
   transport: ClientTransport[F, WCtxIn, WValue],
-  override val hook: ClientHook[F, C, WCtxIn, WValue] = ClientHook.nothing,
+  override val hook: ClientHook[F, C, WCtxIn, WValue] = ClientHook.nothing[F, C, WCtxIn, WValue],
 ) extends ClientTransportBaseImpl[F, C, WCtxIn, WValue] with ICalc.Client[F] {
 
   import codecs._
@@ -115,13 +115,30 @@ class CalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
 }
 
 object ICalcServerWrappedImpl {
+  import io.circe.{Decoder, Encoder}
+  import io.circe.generic.semiauto._
 
   case class SumInput(a: Int, b: Int)
+  object SumInput {
+    implicit def e: Encoder[SumInput] = deriveEncoder
+    implicit def d: Decoder[SumInput] = deriveDecoder
+  }
 
   case class SumOutput(a: Int)
+  object SumOutput {
+    implicit def e: Encoder[SumOutput] = deriveEncoder
+    implicit def d: Decoder[SumOutput] = deriveDecoder
+  }
 
   case class DivInput(a: Int, b: Int)
+  object DivInput {
+    implicit def e: Encoder[DivInput] = deriveEncoder
+    implicit def d: Decoder[DivInput] = deriveDecoder
+  }
 
   case class DivOutput(a: Int)
-
+  object DivOutput {
+    implicit def e: Encoder[DivOutput] = deriveEncoder
+    implicit def d: Decoder[DivOutput] = deriveDecoder
+  }
 }
