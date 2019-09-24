@@ -17,7 +17,8 @@ val circeVersion = "0.12.1"
 libraryDependencies in ThisBuild ++= Seq(
   "io.circe" %% "circe-core",
   "io.circe" %% "circe-generic",
-  "io.circe" %% "circe-parser"
+  "io.circe" %% "circe-parser",
+  "io.circe" %% "circe-literal",
 ).map(_ % circeVersion)
 
 addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")

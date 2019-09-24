@@ -1,9 +1,10 @@
 package rpcmodel.generated
 
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, Json}
 import izumi.functional.bio.{BIO, BIOMonadError, BIOPanic}
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
+import rpcmodel.rt.IRTCodec.IRTCodecFailure
 import rpcmodel.rt.ServerDispatcher.{ServerDispatcherError, _}
 import rpcmodel.rt._
 
@@ -18,8 +19,74 @@ trait CalcCodecs[WValue] {
 
   implicit def codec_DivOutputError: IRTCodec[ZeroDivisionError, WValue]
 
-  //implicit def codec_Output[B: IRTCodec[*, WValue], G: IRTCodec[*, WValue]]: IRTCodec[RPCResult[B, G], WValue]
-  implicit def codec_Output[B: Encoder : Decoder, G: Encoder : Decoder]: IRTCodec[RPCResult[B, G], WValue]
+  implicit def codec_Output[B: IRTCodec[*, WValue], G: IRTCodec[*, WValue]]: IRTCodec[RPCResult[B, G], WValue]
+}
+
+class CalcCodecsCirceJson extends CalcCodecs[Json] {
+  import io.circe.literal._
+
+  def e[T: Encoder](v: T): Json = implicitly[Encoder[T]].apply(v)
+  def d[T: Decoder](v: Json): Either[List[IRTCodec.IRTCodecFailure], T] =implicitly[Decoder[T]].decodeJson(v).left.map(l => List(IRTCodecFailure.IRTCodecException(l)))
+
+  override implicit def codec_SumInput: IRTCodec[SumInput, Json] = new IRTCodec[SumInput, Json] {
+    override def encode(justValue: SumInput): Json = e(justValue)
+
+    override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], SumInput] = d[SumInput](wireValue)
+  }
+
+  override implicit def codec_SumOutput: IRTCodec[SumOutput, Json] = new IRTCodec[SumOutput, Json] {
+    override def encode(justValue: SumOutput): Json = e(justValue)
+
+    override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], SumOutput] = d[SumOutput](wireValue)
+  }
+
+  override implicit def codec_DivInput: IRTCodec[DivInput, Json] = new IRTCodec[DivInput, Json] {
+    override def encode(justValue: DivInput): Json = e(justValue)
+
+    override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], DivInput] = d[DivInput](wireValue)
+  }
+
+  override implicit def codec_DivOutput: IRTCodec[DivOutput, Json] = new IRTCodec[DivOutput, Json] {
+    override def encode(justValue: DivOutput): Json = e(justValue)
+
+    override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], DivOutput] = d[DivOutput](wireValue)
+  }
+
+  override implicit def codec_DivOutputError: IRTCodec[ICalc.ZeroDivisionError, Json] = new IRTCodec[ICalc.ZeroDivisionError, Json] {
+    override def encode(justValue: ICalc.ZeroDivisionError): Json = e(justValue)
+
+    override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], ICalc.ZeroDivisionError] = d[ICalc.ZeroDivisionError](wireValue)
+  }
+
+
+  override implicit def codec_Output[B: IRTCodec[*, Json], G: IRTCodec[*, Json]]: IRTCodec[RPCResult[B, G], Json] = new IRTCodec[RPCResult[B, G], Json] {
+    override def encode(justValue: RPCResult[B, G]): Json = {
+      justValue match {
+        case RPCResult.Good(value) => json"""{"s": ${implicitly[IRTCodec[G, Json]].encode(value)}}"""
+
+        case RPCResult.Bad(value) =>json"""{"f": ${implicitly[IRTCodec[B, Json]].encode(value)}}"""
+      }
+    }
+
+    override def decode(wireValue: Json): Either[List[IRTCodecFailure], RPCResult[B, G]] = {
+      wireValue.asObject match {
+        case Some(value) =>
+          value.toMap.get("s") match {
+            case Some(value) =>
+              implicitly[IRTCodec[G, Json]].decode(value).map(v => RPCResult.Good(v))
+            case None =>
+              value.toMap.get("f") match {
+                case Some(value) =>
+                  implicitly[IRTCodec[B, Json]].decode(value).map(v => RPCResult.Bad(v))
+                case None =>
+                  Left(List(IRTCodecFailure.IRTCodecException(new RuntimeException(s"unexpected json: $wireValue"))))
+              }
+          }
+        case None =>
+          Left(List(IRTCodecFailure.IRTCodecException(new RuntimeException(s"unexpected json: $wireValue"))))
+      }
+    }
+  }
 }
 
 class CalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WValue]

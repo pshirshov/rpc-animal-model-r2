@@ -1,10 +1,8 @@
 import io.circe._
 import org.scalatest.WordSpec
-import rpcmodel.generated.ICalcServerWrappedImpl._
-import rpcmodel.generated.{CalcClientDispatcher, CalcCodecs, CalcServerDispatcher, ICalc}
-import rpcmodel.rt.IRTCodec.IRTCodecFailure
-import rpcmodel.rt.ServerDispatcher.{ClientDispatcherError, ClientDispatcherException, ClientResponse, ServerDispatcherError, ServerError, ServerWireRequest}
-import rpcmodel.rt.{ClientTransport, CtxDec, IRTCodec, ServerDispatcher}
+import rpcmodel.generated.{CalcClientDispatcher, CalcCodecs, CalcCodecsCirceJson, CalcServerDispatcher}
+import rpcmodel.rt.ServerDispatcher._
+import rpcmodel.rt.{ClientHook, ClientTransport, CtxDec, ServerDispatcher}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
 import zio.internal.{Platform, PlatformLive}
@@ -13,50 +11,7 @@ case class ServerCtx()
 case class ClientCtx()
 
 class TransportModelTest extends WordSpec {
-  val codecs: CalcCodecs[Json] = new CalcCodecs[Json] {
-
-    def e[T: Encoder](v: T): Json = implicitly[Encoder[T]].apply(v)
-    def d[T: Decoder](v: Json): Either[List[IRTCodec.IRTCodecFailure], T] =implicitly[Decoder[T]].decodeJson(v).left.map(l => List(IRTCodecFailure.IRTCodecException(l)))
-
-    override implicit def codec_SumInput: IRTCodec[SumInput, Json] = new IRTCodec[SumInput, Json] {
-      override def encode(justValue: SumInput): Json = e(justValue)
-
-      override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], SumInput] = d[SumInput](wireValue)
-    }
-
-    override implicit def codec_SumOutput: IRTCodec[SumOutput, Json] = new IRTCodec[SumOutput, Json] {
-      override def encode(justValue: SumOutput): Json = e(justValue)
-
-      override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], SumOutput] = d[SumOutput](wireValue)
-    }
-
-    override implicit def codec_DivInput: IRTCodec[DivInput, Json] = new IRTCodec[DivInput, Json] {
-      override def encode(justValue: DivInput): Json = e(justValue)
-
-      override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], DivInput] = d[DivInput](wireValue)
-    }
-
-    override implicit def codec_DivOutput: IRTCodec[DivOutput, Json] = new IRTCodec[DivOutput, Json] {
-      override def encode(justValue: DivOutput): Json = e(justValue)
-
-      override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], DivOutput] = d[DivOutput](wireValue)
-    }
-
-    override implicit def codec_DivOutputError: IRTCodec[ICalc.ZeroDivisionError, Json] = new IRTCodec[ICalc.ZeroDivisionError, Json] {
-      override def encode(justValue: ICalc.ZeroDivisionError): Json = e(justValue)
-
-      override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], ICalc.ZeroDivisionError] = d[ICalc.ZeroDivisionError](wireValue)
-    }
-
-
-
-    override implicit def codec_Output[B: Encoder : Decoder, G: Encoder : Decoder]: IRTCodec[ServerDispatcher.RPCResult[B, G], Json] = new IRTCodec[ServerDispatcher.RPCResult[B, G], Json] {
-      override def encode(justValue: ServerDispatcher.RPCResult[B, G]): Json = e(justValue)
-
-      override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], ServerDispatcher.RPCResult[B, G]] = d[ServerDispatcher.RPCResult[B, G]](wireValue)
-    }
-
-  }
+  val codecs: CalcCodecs[Json] = new CalcCodecsCirceJson()
 
 
   "transport model" should {
@@ -90,8 +45,13 @@ class TransportModelTest extends WordSpec {
       val client = new CalcClientDispatcher[IO, ClientCtx, Map[String, String], Json](
         clientctxdec,
         codecs,
-        transport
-
+        transport,
+        new ClientHook[IO, ClientCtx, Map[String, String], Json] {
+          override def onDecode[E, A](res: ClientResponse[Map[String, String], Json], c: ClientCtx, next: (ClientCtx, ClientResponse[Map[String, String], Json]) => IO[E, A]): IO[E, A] = {
+            println(s"Client hook: ${res.value}")
+            super.onDecode(res, c, next)
+          }
+        }
       )
 
       import zio._
