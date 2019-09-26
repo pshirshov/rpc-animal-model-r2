@@ -2,7 +2,7 @@ package rpcmodel.rt
 
 import io.circe.{DecodingFailure, HCursor, Json}
 import izumi.functional.bio.{BIO, BIOError}
-import rpcmodel.rt.ServerDispatcher._
+import rpcmodel.rt.GeneratedServerBase._
 import rpcmodel.rt.IRTCodec.IRTCodecFailure
 
 trait ServerContext[F[_, _], C, WCtxIn, WValue] {
@@ -19,8 +19,8 @@ trait ServerHook[F[+_, +_], C, WCtxIn, WValue] extends ServerContext[F, C, WCtxI
     next(r, c)
   }
 
-  def onEncode[T : IRTCodec[*, WValue], B: IRTCodec[*, WValue]](r: Req, c: C, b: B, t: T, next: (Req, C, B, T) => F[ServerDispatcherError, WValue]): F[ServerDispatcherError, WValue] = {
-    next(r, c, b, t)
+  def onEncode[A : IRTCodec[*, WValue], E: IRTCodec[*, WValue]](r: Req, c: C, e: E, a: A, next: (Req, C, E, A) => F[ServerDispatcherError, WValue]): F[ServerDispatcherError, WValue] = {
+    next(r, c, e, a)
   }
 }
 
@@ -30,17 +30,15 @@ object ServerHook {
 
 
 
-trait ServerDispatcher[F[_, _], C, WCtxIn, WValue] extends ServerContext[F, C, WCtxIn, WValue] {
+trait GeneratedServerBase[F[_, _], C, WCtxIn, WValue] extends ServerContext[F, C, WCtxIn, WValue] {
   def dispatch(methodId: MethodId, r: Req): F[ServerDispatcherError, ServerWireResponse[WValue]]
   def methods: Map[MethodId, Req => F[ServerDispatcherError, Res]]
-
-  protected def doDecode[V : IRTCodec[*, WValue]](r: Req, c: C): F[ServerDispatcherError, V]
 }
 
-abstract class DispatherBaseImpl[F[+_, +_] : BIOError, C, WCtxIn, WValue]
+abstract class GeneratedServerBaseImpl[F[+_, +_] : BIOError, C, WCtxIn, WValue]
 (
 
-) extends ServerDispatcher[F, C, WCtxIn, WValue] {
+) extends GeneratedServerBase[F, C, WCtxIn, WValue] {
   import BIO._
 
   def hook: ServerHook[F,C, WCtxIn, WValue]
@@ -69,7 +67,7 @@ abstract class DispatherBaseImpl[F[+_, +_] : BIOError, C, WCtxIn, WValue]
   }
 }
 
-object ServerDispatcher {
+object GeneratedServerBase {
   case class ClientResponse[WCtxIn, WValue](c: WCtxIn, value: WValue)
 
   case class ServerWireRequest[WCtxIn, WValue](c: WCtxIn, value: WValue)

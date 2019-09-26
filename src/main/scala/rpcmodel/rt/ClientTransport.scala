@@ -1,7 +1,7 @@
 package rpcmodel.rt
 
 import izumi.functional.bio.BIOError
-import rpcmodel.rt.ServerDispatcher.{ClientDispatcherError, ClientResponse, ClientCodecFailure, MethodId}
+import rpcmodel.rt.GeneratedServerBase.{ClientDispatcherError, ClientResponse, ClientCodecFailure, MethodId}
 
 trait ClientHook[F[_, _], C, WCtxIn, WValue] {
   def onCtxDecode(res: ClientResponse[WCtxIn, WValue], next: ClientResponse[WCtxIn, WValue] => F[ClientDispatcherError, C]): F[ClientDispatcherError, C] = {
@@ -22,7 +22,7 @@ trait ClientTransport[F[_, _], WCtxIn, WValue] {
   def dispatch(methodId: MethodId, body: WValue): F[ClientDispatcherError, ClientResponse[WCtxIn, WValue]]
 }
 
-abstract class ClientTransportBaseImpl[F[+_, +_] : BIOError, C, WCtxIn, WValue] {
+abstract class GeneratedClientBase[F[+_, +_] : BIOError, C, WCtxIn, WValue] {
   import izumi.functional.bio.BIO._
 
   def hook: ClientHook[F, C, WCtxIn, WValue] = ClientHook.nothing

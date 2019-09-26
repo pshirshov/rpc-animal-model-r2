@@ -5,7 +5,7 @@ import izumi.functional.bio.{BIO, BIOMonadError, BIOPanic}
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
 import rpcmodel.rt.IRTCodec.IRTCodecFailure
-import rpcmodel.rt.ServerDispatcher.{ServerDispatcherError, _}
+import rpcmodel.rt.GeneratedServerBase.{ServerDispatcherError, _}
 import rpcmodel.rt._
 
 trait CalcCodecs[WValue] {
@@ -22,11 +22,11 @@ trait CalcCodecs[WValue] {
   implicit def codec_Output[B: IRTCodec[*, WValue], G: IRTCodec[*, WValue]]: IRTCodec[RPCResult[B, G], WValue]
 }
 
-class CalcCodecsCirceJson extends CalcCodecs[Json] {
+class GeneratedCalcCodecsCirceJson extends CalcCodecs[Json] {
   import io.circe.literal._
 
   def e[T: Encoder](v: T): Json = implicitly[Encoder[T]].apply(v)
-  def d[T: Decoder](v: Json): Either[List[IRTCodec.IRTCodecFailure], T] =implicitly[Decoder[T]].decodeJson(v).left.map(l => List(IRTCodecFailure.IRTCodecException(l)))
+  def d[T: Decoder](v: Json): Either[List[IRTCodec.IRTCodecFailure], T] = implicitly[Decoder[T]].decodeJson(v).left.map(l => List(IRTCodecFailure.IRTCodecException(l)))
 
   override implicit def codec_SumInput: IRTCodec[SumInput, Json] = new IRTCodec[SumInput, Json] {
     override def encode(justValue: SumInput): Json = e(justValue)
@@ -89,13 +89,13 @@ class CalcCodecsCirceJson extends CalcCodecs[Json] {
   }
 }
 
-class CalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WValue]
+class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WValue]
 (
   server: ICalc.Server[F, C],
   ctxdec: CtxDec[F, ServerDispatcherError, WCtxIn, C],
   codecs: CalcCodecs[WValue],
   override val hook: ServerHook[F, C, WCtxIn, WValue] = ServerHook.nothing[F, C, WCtxIn, WValue],
-) extends DispatherBaseImpl[F, C, WCtxIn, WValue] {
+) extends GeneratedServerBaseImpl[F, C, WCtxIn, WValue] {
 
   import BIO._
   import codecs._
@@ -129,13 +129,13 @@ class CalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WValue]
 }
 
 
-class CalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
+class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
 (
   ctxdec: CtxDec[F, ClientDispatcherError, WCtxIn, C],
   codecs: CalcCodecs[WValue],
   transport: ClientTransport[F, WCtxIn, WValue],
   override val hook: ClientHook[F, C, WCtxIn, WValue] = ClientHook.nothing[F, C, WCtxIn, WValue],
-) extends ClientTransportBaseImpl[F, C, WCtxIn, WValue] with ICalc.Client[F] {
+) extends GeneratedClientBase[F, C, WCtxIn, WValue] with ICalc.Client[F] {
 
   import codecs._
   import BIO._
