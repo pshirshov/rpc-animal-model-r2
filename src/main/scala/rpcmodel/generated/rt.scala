@@ -1,6 +1,6 @@
 package rpcmodel.generated
 
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{Decoder, Encoder, Json, Printer}
 import izumi.functional.bio.{BIO, BIOMonadError, BIOPanic}
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
@@ -8,7 +8,7 @@ import rpcmodel.rt.IRTCodec.IRTCodecFailure
 import rpcmodel.rt.GeneratedServerBase.{ServerDispatcherError, _}
 import rpcmodel.rt._
 
-trait CalcCodecs[WValue] {
+trait GeneratedCalcCodecs[WValue] {
   implicit def codec_SumInput: IRTCodec[SumInput, WValue]
 
   implicit def codec_SumOutput: IRTCodec[SumOutput, WValue]
@@ -22,7 +22,10 @@ trait CalcCodecs[WValue] {
   implicit def codec_Output[B: IRTCodec[*, WValue], G: IRTCodec[*, WValue]]: IRTCodec[RPCResult[B, G], WValue]
 }
 
-class GeneratedCalcCodecsCirceJson extends CalcCodecs[Json] {
+trait GeneratedCalcCodecsCirce extends GeneratedCalcCodecs[Json] {
+}
+
+class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
   import io.circe.literal._
 
   def e[T: Encoder](v: T): Json = implicitly[Encoder[T]].apply(v)
@@ -93,7 +96,7 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WVal
 (
   server: ICalc.Server[F, C],
   ctxdec: CtxDec[F, ServerDispatcherError, WCtxIn, C],
-  codecs: CalcCodecs[WValue],
+  codecs: GeneratedCalcCodecs[WValue],
   override val hook: ServerHook[F, C, WCtxIn, WValue] = ServerHook.nothing[F, C, WCtxIn, WValue],
 ) extends GeneratedServerBaseImpl[F, C, WCtxIn, WValue] {
 
@@ -132,7 +135,7 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WVal
 class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
 (
   ctxdec: CtxDec[F, ClientDispatcherError, WCtxIn, C],
-  codecs: CalcCodecs[WValue],
+  codecs: GeneratedCalcCodecs[WValue],
   transport: ClientTransport[F, WCtxIn, WValue],
   override val hook: ClientHook[F, C, WCtxIn, WValue] = ClientHook.nothing[F, C, WCtxIn, WValue],
 ) extends GeneratedClientBase[F, C, WCtxIn, WValue] with ICalc.Client[F] {

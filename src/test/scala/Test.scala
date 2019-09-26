@@ -1,6 +1,6 @@
 import io.circe._
 import org.scalatest.WordSpec
-import rpcmodel.generated.{GeneratedCalcClientDispatcher, CalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
+import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.GeneratedServerBase._
 import rpcmodel.rt.{ClientHook, ClientTransport, CtxDec, IRTCodec, GeneratedServerBase}
 import rpcmodel.user.impl.CalcServerImpl
@@ -11,7 +11,7 @@ case class CustomServerCtx()
 case class CustomClientCtx()
 
 class TransportModelTest extends WordSpec {
-  val codecs: CalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
+  val codecs: GeneratedCalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
 
 
   "transport model" should {
