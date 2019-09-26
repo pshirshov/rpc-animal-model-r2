@@ -19,8 +19,8 @@ trait ServerHook[F[+_, +_], C, WCtxIn, WValue] extends ServerContext[F, C, WCtxI
     next(r, c)
   }
 
-  def onEncode[A : IRTCodec[*, WValue], E: IRTCodec[*, WValue]](r: Req, c: C, e: E, a: A, next: (Req, C, E, A) => F[ServerDispatcherError, WValue]): F[ServerDispatcherError, WValue] = {
-    next(r, c, e, a)
+  def onEncode[ReqBody : IRTCodec[*, WValue], ResBody: IRTCodec[*, WValue]](r: Req, c: C, reqBody: ResBody, resBody: ReqBody, next: (Req, C, ResBody, ReqBody) => F[ServerDispatcherError, WValue]): F[ServerDispatcherError, WValue] = {
+    next(r, c, reqBody, resBody)
   }
 }
 
@@ -57,10 +57,10 @@ abstract class GeneratedServerBaseImpl[F[+_, +_] : BIOError, C, WCtxIn, WValue]
     hook.onDecode(r, c, (req, _) => F.fromEither(codec.decode(req.value).left.map(f => ServerCodecFailure(f))))
   }
 
-  protected final def doEncode[T : IRTCodec[*, WValue], B: IRTCodec[*, WValue]](r: Req, c: C, b: B, t: T): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
-    val codec = implicitly[IRTCodec[T, WValue]]
+  protected final def doEncode[ResBody : IRTCodec[*, WValue], ReqBody: IRTCodec[*, WValue]](r: Req, c: C, reqBody: ReqBody, resBody: ResBody): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
+    val codec = implicitly[IRTCodec[ResBody, WValue]]
     for {
-      out <- hook.onEncode(r, c, b, t, (_: Req, _: C, _: B, t: T) => F.pure(codec.encode(t)))
+      out <- hook.onEncode(r, c, reqBody, resBody, (_: Req, _: C, _: ReqBody, rb: ResBody) => F.pure(codec.encode(rb)))
     } yield {
       ServerWireResponse(out)
     }
