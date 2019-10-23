@@ -75,7 +75,6 @@ class WebsocketListener[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors](
   }
 
   override def onFullTextMessage(channel: WebSocketChannel, message: BufferedTextMessage): Unit = {
-
     val result = for {
       sbody <- F.pure(message.getData)
       decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
@@ -88,24 +87,14 @@ class WebsocketListener[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors](
 
     val ctx = WsResponseContext(channel, exchange)
 
-    val out = for {
+    val out: F[Nothing, Unit] = for {
       out <- result.sandbox.leftMap(_.toEither).redeemPure(handler.onError(ctx), v => TransportResponse.Success(v))
       json = out.value.printWith(printer)
       _ <- F.sync(doSend(json, ctx))
     } yield {
     }
 
-    BIORunner[F].unsafeRunSyncAsEither(out) match {
-      case BIOExit.Success(_) =>
-      case f: BIOExit.Failure[Nothing] =>
-        f.toEither match {
-          case Right(_) => // nothing
-
-          case Left(t) =>
-            t.foreach(_.printStackTrace())
-            ??? // TODO: call logger
-        }
-    }
+    BIORunner[F].unsafeRun(out)
   }
 
   private def doSend(value: String, ctx: WsResponseContext): Unit = {

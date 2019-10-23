@@ -8,7 +8,6 @@ import rpcmodel.rt.transport.dispatch.CtxDec
 import rpcmodel.rt.transport.errors.ServerDispatcherError
 import rpcmodel.rt.transport.http.{BasicTransportErrorHandler, HttpServerHandler, MethodIdExtractor, WsHandler}
 import rpcmodel.user.impl.CalcServerImpl
-import rpcmodel.rt.transport.http.WsEnvelope.WsResponseContext
 import zio._
 import zio.clock.Clock
 import zio.internal.PlatformLive

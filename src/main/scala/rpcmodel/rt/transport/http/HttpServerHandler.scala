@@ -7,7 +7,7 @@ import io.circe.parser._
 import io.circe.{Json, Printer}
 import io.undertow.server.{HttpHandler, HttpServerExchange}
 import io.undertow.util.Headers
-import izumi.functional.bio.{BIOAsync, BIOExit, BIORunner}
+import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.GeneratedServerBase.ServerWireResponse
 import rpcmodel.rt.transport.dispatch.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
@@ -55,7 +55,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
       result
     }
 
-    val out = for {
+    val out: F[Nothing, Unit] = for {
       out <- result.sandbox.leftMap(_.toEither).redeemPure(handler.onError(exchange), v => TransportResponse.Success(v.value))
       json = out.value.printWith(printer)
       _ <- F.sync(exchange.getResponseHeaders.put(Headers.CONTENT_TYPE, "text/json"))
@@ -74,18 +74,8 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
     } yield {
     }
 
-    BIORunner[F].unsafeRunSyncAsEither(out) match {
-      case BIOExit.Success(_) =>
-      case f: BIOExit.Failure[Nothing] =>
-        f.toEither match {
-          case Right(_) => // nothing
-
-          case Left(t) =>
-            t.foreach(_.printStackTrace())
-            ??? // TODO: call logger
-        }
-    }
-
+    // see out type, in case this throws - something very unexpected happened, we may just rethrow
+    BIORunner[F].unsafeRun(out)
   }
 }
 

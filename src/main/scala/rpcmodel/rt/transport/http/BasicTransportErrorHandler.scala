@@ -23,8 +23,8 @@ abstract class BasicTransportErrorHandler[DomainError, Ctx] extends TransportErr
         Map("reason" -> Json.fromString(s"Transport exception: ${f.e.getMessage}"))
       case f: ServerTransportError.MethodIdError =>
         Map("reason" -> Json.fromString(s"Can't find method id in: ${f.path}"))
-      case f: ServerTransportError.MissingMethod =>
-        Map("reason" -> Json.fromString(s"No handler for method: ${f.id}"))
+      case f: ServerTransportError.MissingService =>
+        Map("reason" -> Json.fromString(s"No service found for method: ${f.id}"))
       case f: ServerTransportError.JsonCodecError =>
         Map("reason" -> Json.fromString(s"Cannot decode JSON: ${f.s}: ${f.e.getMessage}"))
       case f: ServerTransportError.EnvelopeFormatError =>
