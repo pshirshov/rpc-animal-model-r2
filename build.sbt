@@ -10,6 +10,11 @@ libraryDependencies in ThisBuild += "dev.zio" %% "zio" % "1.0.0-RC12-1"
 
 libraryDependencies in ThisBuild += "io.7mind.izumi" %% "fundamentals-bio" % "0.9.5-M11"
 
+libraryDependencies in ThisBuild ++= Seq(
+  "io.undertow" % "undertow-core"  % "2.0.1.Final",
+  //"io.undertow" % "undertow-websockets-jsr"  % "2.0.1.Final",
+)
+
 //libraryDependencies in ThisBuild += "com.lihaoyi" %% "upickle" % "0.7.5"
 
 val circeVersion = "0.12.1"
@@ -19,7 +24,9 @@ libraryDependencies in ThisBuild ++= Seq(
   "io.circe" %% "circe-generic",
   "io.circe" %% "circe-parser",
   "io.circe" %% "circe-literal",
-).map(_ % circeVersion)
+).map(_ % circeVersion) ++ Seq(
+  "io.circe" %% "circe-derivation" % "0.12.0-M7"
+)
 
 addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")
 

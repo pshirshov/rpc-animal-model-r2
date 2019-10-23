@@ -1,8 +1,14 @@
+package server
+
 import io.circe._
 import org.scalatest.WordSpec
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
-import rpcmodel.rt.GeneratedServerBase._
-import rpcmodel.rt.{ClientHook, ClientTransport, CtxDec, IRTCodec, GeneratedServerBase}
+import rpcmodel.rt.transport.dispatch.GeneratedServerBase._
+import rpcmodel.rt._
+import rpcmodel.rt.transport.codecs.IRTCodec
+import rpcmodel.rt.transport.dispatch.{ClientHook, ClientTransport, CtxDec, GeneratedServerBase}
+import rpcmodel.rt.transport.errors.ClientDispatcherError.ServerError
+import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerDispatcherError}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
 import zio.internal.{Platform, PlatformLive}
@@ -22,7 +28,7 @@ class TransportModelTest extends WordSpec {
       val serverctxdec = new CtxDec[IO, ServerDispatcherError, Map[String, String], CustomServerCtx] {
         override def decode(c: Map[String, String]): IO[ServerDispatcherError, CustomServerCtx] = IO.succeed(CustomServerCtx())
       }
-      val serverDispatcher = new GeneratedCalcServerDispatcher[IO, CustomServerCtx, Map[String, String], Json](
+      val serverDispatcher: GeneratedCalcServerDispatcher[IO, CustomServerCtx, Map[String, String], Json] = new GeneratedCalcServerDispatcher[IO, CustomServerCtx, Map[String, String], Json](
         server,
         serverctxdec,
         codecs

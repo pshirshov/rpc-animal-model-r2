@@ -1,6 +1,6 @@
-package rpcmodel.rt
+package rpcmodel.rt.transport.codecs
 
-import rpcmodel.rt.IRTCodec.IRTCodecFailure
+import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
 
 trait IRTCodec[T, W] {
   def encode(justValue: T): W

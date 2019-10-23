@@ -1,25 +1,29 @@
 package rpcmodel.generated
 
-import io.circe.{Decoder, Encoder, Json, Printer}
+import io.circe.{Decoder, Encoder, Json}
 import izumi.functional.bio.{BIO, BIOMonadError, BIOPanic}
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
-import rpcmodel.rt.IRTCodec.IRTCodecFailure
-import rpcmodel.rt.GeneratedServerBase.{ServerDispatcherError, _}
-import rpcmodel.rt._
+import rpcmodel.rt.transport.codecs.IRTCodec
+import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
+import rpcmodel.rt.transport.dispatch.GeneratedServerBase._
+import rpcmodel.rt.transport.dispatch._
+import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerDispatcherError}
 
 trait GeneratedCalcCodecs[WValue] {
-  implicit def codec_SumInput: IRTCodec[SumInput, WValue]
+  type _IRTCodec1[T] = IRTCodec[T, WValue]
 
-  implicit def codec_SumOutput: IRTCodec[SumOutput, WValue]
+  implicit def codec_SumInput: _IRTCodec1[SumInput]
 
-  implicit def codec_DivInput: IRTCodec[DivInput, WValue]
+  implicit def codec_SumOutput: _IRTCodec1[SumOutput]
 
-  implicit def codec_DivOutput: IRTCodec[DivOutput, WValue]
+  implicit def codec_DivInput: _IRTCodec1[DivInput]
 
-  implicit def codec_DivOutputError: IRTCodec[ZeroDivisionError, WValue]
+  implicit def codec_DivOutput: _IRTCodec1[DivOutput]
 
-  implicit def codec_Output[B: IRTCodec[*, WValue], G: IRTCodec[*, WValue]]: IRTCodec[RPCResult[B, G], WValue]
+  implicit def codec_DivOutputError: _IRTCodec1[ZeroDivisionError]
+
+  implicit def codec_Output[B: _IRTCodec1, G: _IRTCodec1]: _IRTCodec1[RPCResult[B, G]]
 }
 
 trait GeneratedCalcCodecsCirce extends GeneratedCalcCodecs[Json] {
@@ -103,8 +107,12 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WVal
   import BIO._
   import codecs._
 
-  private val sumId = MethodId(ServiceName("CalcService"), MethodName("sum"))
-  private val divId = MethodId(ServiceName("CalcService"), MethodName("div"))
+
+  private val sumId = MethodId(id, MethodName("sum"))
+  private val divId = MethodId(id, MethodName("div"))
+
+  override def id: ServiceName = ServiceName("CalcService")
+
   val methods: Map[MethodId, Req => F[ServerDispatcherError, Res]] = Map(sumId -> sum, divId -> div)
 
   private def sum(r: Req): F[ServerDispatcherError, Res] = {
@@ -123,7 +131,7 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WVal
       ctx <- hook.onCtxDecode(r, req => ctxdec.decode(req.c))
       reqBody <- doDecode[DivInput](r, ctx)
       resBody <- server.div(ctx, reqBody.a, reqBody.b)
-        .redeem[Nothing, RPCResult[ZeroDivisionError, DivOutput]](e => F.pure(RPCResult.Bad(e)), g => F.pure(RPCResult.Good(DivOutput(g))))
+        .redeem[Nothing, RPCResult[ZeroDivisionError, DivOutput]](e => BIOMonadError[F].pure(RPCResult.Bad(e)), g => F.pure(RPCResult.Good(DivOutput(g))))
       response <- doEncode(r, ctx, reqBody, resBody)
     } yield {
       response
@@ -140,8 +148,8 @@ class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
   override val hook: ClientHook[F, C, WCtxIn, WValue] = ClientHook.nothing[F, C, WCtxIn, WValue],
 ) extends GeneratedClientBase[F, C, WCtxIn, WValue] with ICalc.Client[F] {
 
-  import codecs._
   import BIO._
+  import codecs._
 
   override def sum(a: Int, b: Int): F[Nothing, Int] = {
     val id = MethodId(ServiceName("CalcService"), MethodName("sum"))
@@ -185,8 +193,8 @@ class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
 }
 
 object ICalcServerWrappedImpl {
-  import io.circe.{Decoder, Encoder}
   import io.circe.generic.semiauto._
+  import io.circe.{Decoder, Encoder}
 
   case class SumInput(a: Int, b: Int)
   object SumInput {
