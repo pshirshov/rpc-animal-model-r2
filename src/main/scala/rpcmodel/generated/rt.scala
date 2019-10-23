@@ -96,13 +96,12 @@ class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
   }
 }
 
-class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WValue]
+class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 (
   server: ICalc.Server[F, C],
-  ctxdec: CtxDec[F, ServerDispatcherError, WCtxIn, C],
   codecs: GeneratedCalcCodecs[WValue],
-  override val hook: ServerHook[F, C, WCtxIn, WValue] = ServerHook.nothing[F, C, WCtxIn, WValue],
-) extends GeneratedServerBaseImpl[F, C, WCtxIn, WValue] {
+  override val hook: ServerHook[F, C, WValue] = ServerHook.nothing[F, C, WValue],
+) extends GeneratedServerBaseImpl[F, C, WValue] {
 
   import BIO._
   import codecs._
@@ -117,10 +116,9 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WVal
 
   private def sum(r: Req): F[ServerDispatcherError, Res] = {
     for {
-      ctx <- hook.onCtxDecode(r, req => ctxdec.decode(req.c))
-      reqBody <- doDecode[SumInput](r, ctx)
-      resBody <- server.sum(ctx, reqBody.a, reqBody.b).map(v => SumOutput(v))
-      response <- doEncode(r, ctx, reqBody, resBody)
+      reqBody <- doDecode[SumInput](r)
+      resBody <- server.sum(r.c, reqBody.a, reqBody.b).map(v => SumOutput(v))
+      response <- doEncode(r, reqBody, resBody)
     } yield {
       response
     }
@@ -128,11 +126,10 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WVal
 
   private def div(r: Req): F[ServerDispatcherError, Res] = {
     for {
-      ctx <- hook.onCtxDecode(r, req => ctxdec.decode(req.c))
-      reqBody <- doDecode[DivInput](r, ctx)
-      resBody <- server.div(ctx, reqBody.a, reqBody.b)
+      reqBody <- doDecode[DivInput](r)
+      resBody <- server.div(r.c, reqBody.a, reqBody.b)
         .redeem[Nothing, RPCResult[ZeroDivisionError, DivOutput]](e => BIOMonadError[F].pure(RPCResult.Bad(e)), g => F.pure(RPCResult.Good(DivOutput(g))))
-      response <- doEncode(r, ctx, reqBody, resBody)
+      response <- doEncode(r, reqBody, resBody)
     } yield {
       response
     }
@@ -140,13 +137,12 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WCtxIn, WVal
 }
 
 
-class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
+class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WValue]
 (
-  ctxdec: CtxDec[F, ClientDispatcherError, WCtxIn, C],
   codecs: GeneratedCalcCodecs[WValue],
-  transport: ClientTransport[F, WCtxIn, WValue],
-  override val hook: ClientHook[F, C, WCtxIn, WValue] = ClientHook.nothing[F, C, WCtxIn, WValue],
-) extends GeneratedClientBase[F, C, WCtxIn, WValue] with ICalc.Client[F] {
+  transport: ClientTransport[F, C, WValue],
+  override val hook: ClientHook[F, C, WValue] = ClientHook.nothing[F, C, WValue],
+) extends GeneratedClientBase[F, C, WValue] with ICalc.Client[F] {
 
   import BIO._
   import codecs._
@@ -159,8 +155,7 @@ class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
       input <- F.pure(SumInput(a, b))
       encoded = codec.encode(input)
       dispatched <- transport.dispatch(id, encoded)
-      decodedC <- ctxdec.decode(dispatched.c)
-      decodedRes <- doDecode[SumOutput](dispatched, decodedC)
+      decodedRes <- doDecode[SumOutput](dispatched)
     } yield {
       decodedRes.a
     }
@@ -177,8 +172,7 @@ class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
       input <- F.pure(DivInput(a, b))
       encoded = codec.encode(input)
       dispatched <- transport.dispatch(id, encoded)
-      decodedC <- hook.onCtxDecode(dispatched, d => ctxdec.decode(d.c))
-      decodedRes <- doDecode[RPCResult[ZeroDivisionError, DivOutput]](dispatched, decodedC)
+      decodedRes <- doDecode[RPCResult[ZeroDivisionError, DivOutput]](dispatched)
     } yield {
       decodedRes
     }

@@ -4,8 +4,8 @@ import rpcmodel.rt.transport.dispatch.GeneratedServerBase.{ClientResponse, Metho
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 
 
-trait ClientTransport[F[_, _], WCtxIn, WValue] {
-  def dispatch(methodId: MethodId, body: WValue): F[ClientDispatcherError, ClientResponse[WCtxIn, WValue]]
+trait ClientTransport[F[_, _], C, WValue] {
+  def dispatch(methodId: MethodId, body: WValue): F[ClientDispatcherError, ClientResponse[C, WValue]]
 }
 
 

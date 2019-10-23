@@ -7,20 +7,20 @@ import rpcmodel.rt.transport.errors.ServerDispatcherError.{MethodHandlerMissing,
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerDispatcherError}
 
 
-trait GeneratedServerBase[F[_, _], C, WCtxIn, WValue] extends ServerContext[F, C, WCtxIn, WValue] {
+trait GeneratedServerBase[F[_, _], C, WValue] extends ServerContext[F, C, WValue] {
   def id: ServiceName
   def methods: Map[MethodId, Req => F[ServerDispatcherError, Res]]
   def dispatch(methodId: MethodId, r: Req): F[ServerDispatcherError, ServerWireResponse[WValue]]
 }
 
-abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WCtxIn, WValue]
+abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue]
 (
 
-) extends GeneratedServerBase[F, C, WCtxIn, WValue] {
+) extends GeneratedServerBase[F, C, WValue] {
 
   import BIO._
 
-  def hook: ServerHook[F, C, WCtxIn, WValue]
+  def hook: ServerHook[F, C, WValue]
 
   override final def dispatch(methodId: MethodId, r: Req): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
     methods.get(methodId) match {
@@ -31,15 +31,15 @@ abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WCtxIn, WValue
     }
   }
 
-  protected final def doDecode[V: IRTCodec[*, WValue]](r: Req, c: C): F[ServerDispatcherError, V] = {
+  protected final def doDecode[V: IRTCodec[*, WValue]](r: Req): F[ServerDispatcherError, V] = {
     val codec = implicitly[IRTCodec[V, WValue]]
-    hook.onDecode(r, c, (req, _) => F.fromEither(codec.decode(req.value).left.map(f => ServerCodecFailure(f))))
+    hook.onDecode(r, req => F.fromEither(codec.decode(req.value).left.map(f => ServerCodecFailure(f))))
   }
 
-  protected final def doEncode[ResBody: IRTCodec[*, WValue], ReqBody: IRTCodec[*, WValue]](r: Req, c: C, reqBody: ReqBody, resBody: ResBody): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
+  protected final def doEncode[ResBody: IRTCodec[*, WValue], ReqBody: IRTCodec[*, WValue]](r: Req, reqBody: ReqBody, resBody: ResBody): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
     val codec = implicitly[IRTCodec[ResBody, WValue]]
     for {
-      out <- hook.onEncode(r, c, reqBody, resBody, (_: Req, _: C, _: ReqBody, rb: ResBody) => F.pure(codec.encode(rb)))
+      out <- hook.onEncode(r, reqBody, resBody, (_: Req, _: ReqBody, rb: ResBody) => F.pure(codec.encode(rb)))
     } yield {
       ServerWireResponse(out)
     }

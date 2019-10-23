@@ -1,6 +1,7 @@
 package rpcmodel.rt.transport.http
 
 import java.io.IOException
+import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 
 import io.circe.parser._
@@ -9,19 +10,23 @@ import io.undertow.server.{HttpHandler, HttpServerExchange}
 import io.undertow.util.Headers
 import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.GeneratedServerBase.ServerWireResponse
-import rpcmodel.rt.transport.dispatch.GeneratedServerBaseImpl
+import rpcmodel.rt.transport.dispatch.{CtxDec, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.ServerTransportError
 
+case class HttpRequestContext(address: InetSocketAddress, headers:  Map[String, Seq[String]])
 
 class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
 (
-  override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, C, Map[String, Seq[String]], Json]],
+  override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
+  override protected val dec: CtxDec[F, ServerTransportError, HttpRequestContext, C],
   printer: Printer,
   extractor: MethodIdExtractor,
   handler: TransportErrorHandler[DomainErrors, HttpServerExchange]
-) extends AbstractServerHandler[F, C, Json] with HttpHandler {
+) extends AbstractServerHandler[F, C, HttpRequestContext, Json] with HttpHandler {
 
   import izumi.functional.bio.BIO._
+
+
 
 
   override protected def bioAsync: BIOAsync[F] = implicitly
@@ -50,7 +55,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
       })
       sbody = new String(body, StandardCharsets.UTF_8)
       decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
-      result <- call(headers, id, decoded)
+      result <- call(HttpRequestContext(exchange.getSourceAddress, headers), id, decoded)
     } yield {
       result
     }

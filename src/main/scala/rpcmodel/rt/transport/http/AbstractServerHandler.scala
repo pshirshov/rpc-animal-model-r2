@@ -2,16 +2,18 @@ package rpcmodel.rt.transport.http
 
 import izumi.functional.bio.BIOAsync
 import rpcmodel.rt.transport.dispatch.GeneratedServerBase.{MethodId, ServerWireRequest, ServerWireResponse}
-import rpcmodel.rt.transport.dispatch.GeneratedServerBaseImpl
+import rpcmodel.rt.transport.dispatch.{CtxDec, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.ServerTransportError
 
-trait AbstractServerHandler[F[+ _, + _], C, WValue] {
+trait AbstractServerHandler[F[+ _, + _], C, WCtxIn, WValue] {
 
   import izumi.functional.bio.BIO._
 
   protected implicit def bioAsync: BIOAsync[F]
 
-  protected def dispatchers: Seq[GeneratedServerBaseImpl[F, C, Map[String, Seq[String]], WValue]]
+  protected def dispatchers: Seq[GeneratedServerBaseImpl[F, C, WValue]]
+
+  protected def dec: CtxDec[F, ServerTransportError, WCtxIn, C]
 
   private val methods = dispatchers
     .groupBy(_.id)
@@ -24,10 +26,11 @@ trait AbstractServerHandler[F[+ _, + _], C, WValue] {
     }
     .toMap
 
-  protected def call(headers: Map[String, Seq[String]], id: MethodId, decoded: WValue): F[ServerTransportError, ServerWireResponse[WValue]] = {
+  protected def call(headers: WCtxIn, id: MethodId, decoded: WValue): F[ServerTransportError, ServerWireResponse[WValue]] = {
     for {
       svcm <- F.fromOption(ServerTransportError.MissingService(id))(methods.get(id.service))
-      out <- svcm.dispatch(id, ServerWireRequest(headers, decoded)).leftMap(f => ServerTransportError.DispatcherError(f): ServerTransportError)
+      ctx <- dec.decode(headers)
+      out <- svcm.dispatch(id, ServerWireRequest(ctx, decoded)).leftMap(f => ServerTransportError.DispatcherError(f): ServerTransportError)
     } yield {
       out
     }
