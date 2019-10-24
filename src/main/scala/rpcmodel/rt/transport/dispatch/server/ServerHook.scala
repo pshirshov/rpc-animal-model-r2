@@ -1,4 +1,4 @@
-package rpcmodel.rt.transport.dispatch
+package rpcmodel.rt.transport.dispatch.server
 
 import rpcmodel.rt.transport.codecs.IRTCodec
 import rpcmodel.rt.transport.errors.ServerDispatcherError

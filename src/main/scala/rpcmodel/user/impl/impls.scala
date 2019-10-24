@@ -6,7 +6,7 @@ import rpcmodel.generated.ICalc
 import rpcmodel.generated.ICalc._
 
 
-class CalcServerImpl[F[+ _, + _] : BIO, Ctx] extends ICalc.Server[F, Ctx] {
+class CalcServerImpl[F[+ _, + _] : BIO, Ctx] extends ICalc.Interface[F, Ctx] {
   override def sum(c: Ctx, a: Int, b: Int): F[Nothing, Int] = {
     F.pure(a + b)
   }

@@ -8,16 +8,26 @@ import izumi.functional.bio.BIO._
 import izumi.functional.bio.BIOAsync
 import org.asynchttpclient.{AsyncHttpClient, BoundRequestBuilder, Response}
 import rpcmodel.rt.transport.codecs.IRTCodec
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase.ClientResponse
-import rpcmodel.rt.transport.dispatch.{ClientTransport, CtxDec, GeneratedServerBase}
+import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.client.ClientTransport
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 
 
-class AHCClient[F[+_, +_]: BIOAsync, C](c: AsyncHttpClient, target: URL, printer: Printer, ctx: CtxDec[F, ClientDispatcherError, Response, C]) extends ClientTransport[F, C, Json] {
-  override def dispatch(methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[C, Json]] = {
+class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext, ResponseContextWire]
+(
+  client: AsyncHttpClient,
+  target: URL,
+  printer: Printer,
+  ctx: CtxDec[F, ClientDispatcherError, Response, ResponseContextWire],
+  hook: ClientRequestHook[RequestContext] = ClientRequestHook.Passthrough,
+) extends ClientTransport[F, RequestContext, ResponseContextWire, Json] {
+  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContextWire, Json]] = {
     import io.circe.parser._
 
     for {
+      req <- F.pure(hook.onRequest(c, methodId, body, prepare(methodId, body)))
       resp <- F.async[ClientDispatcherError, Response] {
         f =>
 
@@ -31,22 +41,24 @@ class AHCClient[F[+_, +_]: BIOAsync, C](c: AsyncHttpClient, target: URL, printer
             }
           }
 
-          prepare(methodId, body).execute().toCompletableFuture.handle[Unit](handler)
-
+          req.execute().toCompletableFuture.handle[Unit](handler)
+          ()
       }
-      c <- ctx.decode(resp)
+      responseContext <- ctx.decode(resp)
       body = resp.getResponseBody
       parsed <- F.fromEither(parse(body))
         .leftMap(e => ClientDispatcherError.ClientCodecFailure(List(IRTCodec.IRTCodecFailure.IRTParserException(e))))
     } yield {
-      ClientResponse(c, parsed)
+      ClientResponse(responseContext, parsed)
     }
   }
 
   private def prepare(methodId: GeneratedServerBase.MethodId, body: Json): BoundRequestBuilder = {
     val url = new URL(target.getProtocol, target.getHost, target.getPort, s"${target.getFile}/${methodId.service.name}/${methodId.method.name}")
-    c
+    client
       .preparePost(url.toString)
       .setBody(body.printWith(printer))
   }
 }
+
+

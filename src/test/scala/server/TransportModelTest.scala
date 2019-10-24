@@ -4,8 +4,9 @@ import io.circe._
 import org.scalatest.WordSpec
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.codecs.IRTCodec
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase._
-import rpcmodel.rt.transport.dispatch.{ClientHook, ClientTransport, GeneratedServerBase}
+import rpcmodel.rt.transport.dispatch.client.{ClientHook, ClientTransport}
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.errors.ClientDispatcherError.ServerError
 import rpcmodel.user.impl.CalcServerImpl
@@ -27,8 +28,8 @@ class TransportModelTest extends WordSpec {
         codecs
       )
 
-      val fakeTransport = new ClientTransport[IO, CustomClientCtx, Json] {
-        override def dispatch(methodId: GeneratedServerBase.MethodId, body: Json): IO[ClientDispatcherError, GeneratedServerBase.ClientResponse[CustomClientCtx, Json]] = {
+      val fakeTransport = new ClientTransport[IO, CustomClientCtx, CustomClientCtx, Json] {
+        override def dispatch(c: CustomClientCtx, methodId: GeneratedServerBase.MethodId, body: Json): IO[ClientDispatcherError, GeneratedServerBase.ClientResponse[CustomClientCtx, Json]] = {
           for {
             out <- serverDispatcher.dispatch(methodId, ServerWireRequest(CustomServerCtx("0.1.2.3", Map("header" -> Seq("value"))), body)).catchAll(sde => IO.fail(ServerError(sde)))
           } yield {
@@ -38,7 +39,7 @@ class TransportModelTest extends WordSpec {
       }
 
 
-      val client = new GeneratedCalcClientDispatcher[IO, CustomClientCtx, Json](
+      val client = new GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json](
         codecs,
         fakeTransport,
         new ClientHook[IO, CustomClientCtx, Json] {
@@ -53,8 +54,8 @@ class TransportModelTest extends WordSpec {
       val runtime = new DefaultRuntime {
         override val Platform: Platform = PlatformLive.makeDefault().withReportFailure(_ => ())
       }
-      println(runtime.unsafeRunSync(client.div(6, 2)))
-      println(runtime.unsafeRunSync(client.div(6, 0)))
+      println(runtime.unsafeRunSync(client.div(CustomClientCtx(), 6, 2)))
+      println(runtime.unsafeRunSync(client.div(CustomClientCtx(), 6, 0)))
     }
   }
 

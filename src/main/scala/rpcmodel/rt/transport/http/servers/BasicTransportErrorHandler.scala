@@ -42,5 +42,8 @@ abstract class BasicTransportErrorHandler[DomainError, Ctx] extends TransportErr
 }
 
 object BasicTransportErrorHandler {
-  def withoutDomain[Ctx]: BasicTransportErrorHandler[Nothing, Ctx] = (_: Ctx, _: Nothing) => ???
+  def withoutDomain[Ctx]: BasicTransportErrorHandler[Nothing, Ctx] = new BasicTransportErrorHandler[Any, Ctx] {
+    override def transformDomain(ctx: Ctx, domain: Any): TransportResponse =throw new RuntimeException()
+  }.asInstanceOf[BasicTransportErrorHandler[Nothing, Ctx]]
+
 }

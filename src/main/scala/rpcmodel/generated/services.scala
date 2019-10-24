@@ -13,15 +13,15 @@ object ICalc {
     implicit val d: Decoder[ZeroDivisionError] = deriveDecoder
   }
 
-  trait Server[F[_, _], Ctx] {
+  trait Interface[F[_, _], Ctx] {
     def sum(c: Ctx, a: Int, b: Int): F[Nothing, Int]
     def div(c: Ctx, a: Int, b: Int): F[ZeroDivisionError, Int]
   }
 
-  trait Client[F[_, _]] {
-    def sum(a: Int, b: Int): F[Nothing, Int]
-    def div(a: Int, b: Int): F[ZeroDivisionError, Int]
-  }
+//  trait Client[F[_, _], Ctx] {
+//    def sum(c: Ctx, a: Int, b: Int): F[Nothing, Int]
+//    def div(c: Ctx, a: Int, b: Int): F[ZeroDivisionError, Int]
+//  }
 }
 
 //trait IAccountServer[F[_, _], Ctx] {

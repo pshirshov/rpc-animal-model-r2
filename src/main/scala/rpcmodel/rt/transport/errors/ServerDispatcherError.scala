@@ -1,6 +1,6 @@
 package rpcmodel.rt.transport.errors
 
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase.MethodId
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
 import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
 
 sealed trait ServerDispatcherError

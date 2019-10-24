@@ -1,7 +1,7 @@
-package rpcmodel.rt.transport.dispatch
+package rpcmodel.rt.transport.dispatch.client
 
 import rpcmodel.rt.transport.codecs.IRTCodec
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase.ClientResponse
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 
 trait ClientHook[F[_, _], C, WValue] {

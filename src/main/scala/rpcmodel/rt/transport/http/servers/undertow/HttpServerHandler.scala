@@ -8,8 +8,9 @@ import io.circe.{Json, Printer}
 import io.undertow.server.{HttpHandler, HttpServerExchange}
 import io.undertow.util.Headers
 import izumi.functional.bio.{BIOAsync, BIORunner}
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase.ServerWireResponse
-import rpcmodel.rt.transport.dispatch.{CtxDec, GeneratedServerBaseImpl}
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ServerWireResponse
+import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse, undertow}
 

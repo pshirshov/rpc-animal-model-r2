@@ -1,6 +1,6 @@
 package rpcmodel.rt.transport.http.servers
 
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase.{MethodId, MethodName, ServiceName}
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, MethodName, ServiceName}
 import rpcmodel.rt.transport.errors.ServerTransportError
 
 trait MethodIdExtractor {

@@ -6,8 +6,10 @@ import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
 import rpcmodel.rt.transport.codecs.IRTCodec
 import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase._
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.dispatch._
+import rpcmodel.rt.transport.dispatch.client.{ClientHook, ClientTransport, GeneratedClientBase}
+import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBaseImpl, ServerHook}
 import rpcmodel.rt.transport.errors.ServerDispatcherError
 
 trait GeneratedCalcCodecs[WValue] {
@@ -98,7 +100,7 @@ class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
 
 class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 (
-  server: ICalc.Server[F, C],
+  server: ICalc.Interface[F, C],
   codecs: GeneratedCalcCodecs[WValue],
   override val hook: ServerHook[F, C, WValue] = ServerHook.nothing[F, C, WValue],
 ) extends GeneratedServerBaseImpl[F, C, WValue] {
@@ -137,24 +139,24 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 }
 
 
-class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WValue]
+class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
 (
   codecs: GeneratedCalcCodecs[WValue],
-  transport: ClientTransport[F, C, WValue],
-  override val hook: ClientHook[F, C, WValue] = ClientHook.nothing[F, C, WValue],
-) extends GeneratedClientBase[F, C, WValue] with ICalc.Client[F] {
+  transport: ClientTransport[F, C, WCtxIn, WValue],
+  override val hook: ClientHook[F, WCtxIn, WValue] = ClientHook.nothing[F, WCtxIn, WValue],
+) extends GeneratedClientBase[F, C, WCtxIn, WValue] with ICalc.Interface[F, C] {
 
   import BIO._
   import codecs._
 
-  override def sum(a: Int, b: Int): F[Nothing, Int] = {
+  override def sum(c: C, a: Int, b: Int): F[Nothing, Int] = {
     val id = MethodId(ServiceName("CalcService"), MethodName("sum"))
     val codec = implicitly[IRTCodec[SumInput, WValue]]
 
     val out = for {
       input <- F.pure(SumInput(a, b))
       encoded = codec.encode(input)
-      dispatched <- transport.dispatch(id, encoded)
+      dispatched <- transport.dispatch(c, id, encoded)
       decodedRes <- doDecode[SumOutput](dispatched)
     } yield {
       decodedRes.a
@@ -164,14 +166,14 @@ class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WValue]
   }
 
 
-  override def div(a: Int, b: Int): F[ZeroDivisionError, Int] = {
+  override def div(c: C, a: Int, b: Int): F[ZeroDivisionError, Int] = {
     val id = MethodId(ServiceName("CalcService"), MethodName("div"))
     val codec = implicitly[IRTCodec[DivInput, WValue]]
 
     val out = for {
       input <- F.pure(DivInput(a, b))
       encoded = codec.encode(input)
-      dispatched <- transport.dispatch(id, encoded)
+      dispatched <- transport.dispatch(c, id, encoded)
       decodedRes <- doDecode[RPCResult[ZeroDivisionError, DivOutput]](dispatched)
     } yield {
       decodedRes

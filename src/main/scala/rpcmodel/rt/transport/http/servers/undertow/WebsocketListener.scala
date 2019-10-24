@@ -7,8 +7,9 @@ import io.undertow.websockets.WebSocketConnectionCallback
 import io.undertow.websockets.core._
 import io.undertow.websockets.spi.WebSocketHttpExchange
 import izumi.functional.bio.{BIOAsync, BIORunner}
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase.{MethodId, MethodName, ServiceName}
-import rpcmodel.rt.transport.dispatch.{CtxDec, GeneratedServerBaseImpl}
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, MethodName, ServiceName}
+import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, WsResponseContext}
 import rpcmodel.rt.transport.http.servers.{AbstractServerHandler, TransportErrorHandler, TransportResponse}
@@ -89,6 +90,7 @@ class WebsocketListener[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
   }
 
   override def onFullTextMessage(channel: WebSocketChannel, message: BufferedTextMessage): Unit = {
+    assert(channel == this.channel)
     val result = for {
       sbody <- F.pure(message.getData)
       decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))

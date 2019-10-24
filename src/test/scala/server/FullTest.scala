@@ -8,19 +8,19 @@ import izumi.functional.bio.BIORunner
 import org.asynchttpclient.Response
 import org.scalatest.WordSpec
 import rpcmodel.generated.ICalc.ZeroDivisionError
-import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher, ICalc}
+import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.codecs.IRTCodec
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase._
-import rpcmodel.rt.transport.dispatch.{ClientHook, CtxDec}
+import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.client.ClientHook
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.clients.ahc.AHCClient
+import rpcmodel.rt.transport.http.clients.ahc.AHCHttpClient
 import rpcmodel.rt.transport.http.servers.undertow.{HttpRequestContext, HttpServerHandler, WSRequestContext, WsHandler}
 import rpcmodel.rt.transport.http.servers.{BasicTransportErrorHandler, MethodIdExtractor}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
 import zio.clock.Clock
 import zio.internal.{Platform, PlatformLive}
-import zio._
 
 
 class FullTest extends WordSpec {
@@ -38,8 +38,8 @@ class FullTest extends WordSpec {
 
     println("Client...")
     val client = makeClient()
-    println(runtime.unsafeRunSync(client.div(6, 2)))
-    println(runtime.unsafeRunSync(client.div(6, 0)))
+    println(runtime.unsafeRunSync(client.div(CustomClientCtx(), 6, 2)))
+    println(runtime.unsafeRunSync(client.div(CustomClientCtx(), 6, 0)))
   }
 
 
@@ -49,10 +49,10 @@ class FullTest extends WordSpec {
       try {
         server.start()
         val client = makeClient()
-        assert(runtime.unsafeRunSync(client.div(6, 2)) == Exit.Success(3))
+        assert(runtime.unsafeRunSync(client.div(CustomClientCtx(), 6, 2)) == Exit.Success(3))
 
         val negative = for {
-          res <- client.div(6, 0)
+          res <- client.div(CustomClientCtx(), 6, 0)
             .catchAll((_: ZeroDivisionError) => IO("Got error"))
         } yield {
           res
@@ -67,10 +67,10 @@ class FullTest extends WordSpec {
     }
   }
 
-  private def makeClient(): GeneratedCalcClientDispatcher[IO, CustomClientCtx, Json] = {
+  private def makeClient(): GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json] = {
     import org.asynchttpclient.Dsl._
 
-    val fakeTransport = new AHCClient[IO, CustomClientCtx](asyncHttpClient(config()), new URL("http://localhost:8080/http"), printer, new CtxDec[IO, ClientDispatcherError, Response, CustomClientCtx] {
+    val fakeTransport = new AHCHttpClient[IO, CustomClientCtx, CustomClientCtx](asyncHttpClient(config()), new URL("http://localhost:8080/http"), printer, new CtxDec[IO, ClientDispatcherError, Response, CustomClientCtx] {
       override def decode(c: Response): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
     })
 
@@ -81,7 +81,7 @@ class FullTest extends WordSpec {
         super.onDecode(res, next)
       }
     }
-    new GeneratedCalcClientDispatcher[IO, CustomClientCtx, Json](
+    new GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json](
       codecs,
       fakeTransport,
       hook

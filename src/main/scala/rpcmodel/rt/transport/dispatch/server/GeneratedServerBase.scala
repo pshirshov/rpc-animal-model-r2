@@ -1,8 +1,8 @@
-package rpcmodel.rt.transport.dispatch
+package rpcmodel.rt.transport.dispatch.server
 
 import izumi.functional.bio.{BIO, BIOError}
 import rpcmodel.rt.transport.codecs.IRTCodec
-import rpcmodel.rt.transport.dispatch.GeneratedServerBase._
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.ServerDispatcherError.{MethodHandlerMissing, ServerCodecFailure}
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerDispatcherError}
 
