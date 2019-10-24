@@ -1,7 +1,7 @@
-package rpcmodel.rt.transport.http
+package rpcmodel.rt.transport.http.servers
 
-import io.circe.{Codec, Json}
 import io.circe.derivation._
+import io.circe.{Codec, Json}
 
 sealed trait TransportResponse {
   def value: Json

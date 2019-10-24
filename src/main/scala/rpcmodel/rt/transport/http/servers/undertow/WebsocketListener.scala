@@ -1,6 +1,4 @@
-package rpcmodel.rt.transport.http
-
-import java.net.InetSocketAddress
+package rpcmodel.rt.transport.http.servers.undertow
 
 import io.circe._
 import io.circe.parser.parse
@@ -8,11 +6,12 @@ import io.circe.syntax._
 import io.undertow.websockets.WebSocketConnectionCallback
 import io.undertow.websockets.core._
 import io.undertow.websockets.spi.WebSocketHttpExchange
-import izumi.functional.bio.{BIOAsync, BIOExit, BIORunner}
+import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.GeneratedServerBase.{MethodId, MethodName, ServiceName}
 import rpcmodel.rt.transport.dispatch.{CtxDec, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.WsEnvelope.WsResponseContext
+import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, WsResponseContext}
+import rpcmodel.rt.transport.http.servers.{AbstractServerHandler, TransportErrorHandler, TransportResponse}
 
 
 object WsEnvelope {
@@ -53,7 +52,7 @@ object WsEnvelope {
 
 }
 
-case class WSRequestContext(address: InetSocketAddress, headers:  Map[String, Seq[String]])
+case class WSRequestContext(channel: WebSocketChannel, envelope: EnvelopeIn, body: String)
 
 class WsHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors](
                                                                       dec: CtxDec[F, ServerTransportError, WSRequestContext, C],
@@ -94,7 +93,7 @@ class WebsocketListener[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
       sbody <- F.pure(message.getData)
       decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
       envelope <- F.fromEither(decoded.as[EnvelopeIn]).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
-      result <- call(WSRequestContext(channel.getDestinationAddress , envelope.headers), envelope.methodId, envelope.body)
+      result <- call(WSRequestContext(channel, envelope, sbody), envelope.methodId, envelope.body)
       out = EnvelopeOut(Map.empty, result.value, envelope.id).asJson
     } yield {
       out

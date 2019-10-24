@@ -1,7 +1,6 @@
-package rpcmodel.rt.transport.http
+package rpcmodel.rt.transport.http.servers.undertow
 
 import java.io.IOException
-import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 
 import io.circe.parser._
@@ -12,8 +11,9 @@ import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.GeneratedServerBase.ServerWireResponse
 import rpcmodel.rt.transport.dispatch.{CtxDec, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.ServerTransportError
+import rpcmodel.rt.transport.http.servers.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse, undertow}
 
-case class HttpRequestContext(address: InetSocketAddress, headers:  Map[String, Seq[String]])
+
 
 class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
 (
@@ -27,8 +27,6 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
   import izumi.functional.bio.BIO._
 
 
-
-
   override protected def bioAsync: BIOAsync[F] = implicitly
 
   override def handleRequest(exchange: HttpServerExchange): Unit = {
@@ -37,16 +35,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
       return
     }
 
-    import scala.collection.JavaConverters._
-
     val result: F[ServerTransportError, ServerWireResponse[Json]] = for {
-      headers <- F.sync {
-        val nativeHeaders = exchange.getRequestHeaders
-        nativeHeaders.getHeaderNames.asScala.map {
-          n =>
-            (n.toString, nativeHeaders.get(n).iterator().asScala.toSeq)
-        }.toMap
-      }
       id <- F.fromEither(extractor.extract(exchange.getRequestPath))
       body <- F.async[ServerTransportError, Array[Byte]](f => {
         exchange.getRequestReceiver.receiveFullBytes(
@@ -55,7 +44,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
       })
       sbody = new String(body, StandardCharsets.UTF_8)
       decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
-      result <- call(HttpRequestContext(exchange.getSourceAddress, headers), id, decoded)
+      result <- call(undertow.HttpRequestContext(exchange, body, decoded), id, decoded)
     } yield {
       result
     }

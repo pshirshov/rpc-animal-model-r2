@@ -1,4 +1,4 @@
-package rpcmodel.rt.transport.http
+package rpcmodel.rt.transport.http.servers
 
 import izumi.functional.bio.BIOAsync
 import rpcmodel.rt.transport.dispatch.GeneratedServerBase.{MethodId, ServerWireRequest, ServerWireResponse}

@@ -1,4 +1,4 @@
-package rpcmodel.rt.transport.http
+package rpcmodel.rt.transport.http.servers
 
 import io.circe.Json
 import io.circe.syntax._

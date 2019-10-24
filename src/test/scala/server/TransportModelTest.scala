@@ -16,7 +16,7 @@ case class CustomServerCtx(ip: String, headers: Map[String, Seq[String]])
 case class CustomClientCtx()
 
 class TransportModelTest extends WordSpec {
-  val codecs: GeneratedCalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
+  private val codecs: GeneratedCalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
 
 
   "transport model" should {
@@ -57,4 +57,6 @@ class TransportModelTest extends WordSpec {
       println(runtime.unsafeRunSync(client.div(6, 0)))
     }
   }
+
+
 }

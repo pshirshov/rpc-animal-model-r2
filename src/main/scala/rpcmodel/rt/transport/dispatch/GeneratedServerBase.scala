@@ -57,8 +57,6 @@ object GeneratedServerBase {
 
   case class ClientDispatcherException(error: ClientDispatcherError) extends RuntimeException
 
-
-
   case class MethodName(name: String) extends AnyVal
 
   case class ServiceName(name: String) extends AnyVal

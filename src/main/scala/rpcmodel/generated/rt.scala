@@ -8,7 +8,7 @@ import rpcmodel.rt.transport.codecs.IRTCodec
 import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
 import rpcmodel.rt.transport.dispatch.GeneratedServerBase._
 import rpcmodel.rt.transport.dispatch._
-import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerDispatcherError}
+import rpcmodel.rt.transport.errors.ServerDispatcherError
 
 trait GeneratedCalcCodecs[WValue] {
   type _IRTCodec1[T] = IRTCodec[T, WValue]
