@@ -98,6 +98,8 @@ class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
   }
 }
 
+
+
 class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 (
   server: ICalc.Interface[F, C],
@@ -139,12 +141,12 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 }
 
 
-class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WCtxIn, WValue]
+class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, ResponseContext, WValue]
 (
   codecs: GeneratedCalcCodecs[WValue],
-  transport: ClientTransport[F, C, WCtxIn, WValue],
-  override val hook: ClientHook[F, WCtxIn, WValue] = ClientHook.nothing[F, WCtxIn, WValue],
-) extends GeneratedClientBase[F, C, WCtxIn, WValue] with ICalc.Interface[F, C] {
+  transport: ClientTransport[F, C, ResponseContext, WValue],
+  override val hook: ClientHook[F, ResponseContext, WValue] = ClientHook.nothing[F, ResponseContext, WValue],
+) extends GeneratedClientBase[F, C, ResponseContext, WValue] with ICalc.Interface[F, C] {
 
   import BIO._
   import codecs._

@@ -15,15 +15,15 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 
 
-class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext, ResponseContextWire]
+class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext, ResponseContext]
 (
   client: AsyncHttpClient,
   target: URL,
   printer: Printer,
-  ctx: CtxDec[F, ClientDispatcherError, Response, ResponseContextWire],
+  ctx: CtxDec[F, ClientDispatcherError, Response, ResponseContext],
   hook: ClientRequestHook[RequestContext] = ClientRequestHook.Passthrough,
-) extends ClientTransport[F, RequestContext, ResponseContextWire, Json] {
-  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContextWire, Json]] = {
+) extends ClientTransport[F, RequestContext, ResponseContext, Json] {
+  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
     import io.circe.parser._
 
     for {

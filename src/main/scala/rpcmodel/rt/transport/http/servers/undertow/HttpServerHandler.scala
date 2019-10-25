@@ -14,7 +14,14 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse, undertow}
 
-
+// Server replies to incoming request:
+//   - CtxDec may extract additional data from request and pass it as C
+//   - Handlers may be proxied and may consider C
+//   - server reply CANNOT be altered in case of positive response
+//   - server reply can be altered for negative response with DomainError
+// Client makes a request:
+//   - Client request can be altered, user may pass custom context, C
+//   - Server response may produce a custom context (see ClientResponse) but it will be ignored
 
 class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
 (

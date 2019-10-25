@@ -49,7 +49,7 @@ abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue]
 
 object GeneratedServerBase {
 
-  case class ClientResponse[WCtxIn, WValue](c: WCtxIn, value: WValue)
+  case class ClientResponse[ResponseContext, WValue](c: ResponseContext, value: WValue)
 
   case class ServerWireRequest[WCtxIn, WValue](c: WCtxIn, value: WValue)
 

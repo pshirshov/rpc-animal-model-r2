@@ -1,6 +1,6 @@
 package server
 
-import java.net.URL
+import java.net.{URI, URL}
 
 import io.circe._
 import io.undertow.{Handlers, Undertow}
@@ -14,7 +14,8 @@ import rpcmodel.rt.transport.dispatch.CtxDec
 import rpcmodel.rt.transport.dispatch.client.ClientHook
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.clients.ahc.AHCHttpClient
+import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient}
+import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.EnvelopeOut
 import rpcmodel.rt.transport.http.servers.undertow.{HttpRequestContext, HttpServerHandler, WSRequestContext, WsHandler}
 import rpcmodel.rt.transport.http.servers.{BasicTransportErrorHandler, MethodIdExtractor}
 import rpcmodel.user.impl.CalcServerImpl
@@ -22,25 +23,32 @@ import zio._
 import zio.clock.Clock
 import zio.internal.{Platform, PlatformLive}
 
-
-class FullTest extends WordSpec {
-  private val codecs: GeneratedCalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
-  private implicit val clock: Clock.Live.type = Clock.Live
-  private val printer: Printer = Printer.spaces2
-  private val runtime = new DefaultRuntime {
-    override val Platform: Platform = PlatformLive.makeDefault().withReportFailure(_ => ())
-  }
-
+object FullTest extends FullTest {
   def main(args: Array[String]): Unit = {
     println("Server...")
     val server = makeServer()
     server.start()
 
-    println("Client...")
-    val client = makeClient()
-    println(runtime.unsafeRunSync(client.div(CustomClientCtx(), 6, 2)))
-    println(runtime.unsafeRunSync(client.div(CustomClientCtx(), 6, 0)))
+    //    println("Client...")
+    //    val httpClient = makeClient()
+    //    println(runtime.unsafeRunSync(httpClient.div(CustomClientCtx(), 6, 2)))
+    //    println(runtime.unsafeRunSync(httpClient.div(CustomClientCtx(), 6, 0)))
+
+    println("WS Client...")
+    val wsClient = makeWsClient()
+    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 2)))
+    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 0)))
   }
+}
+
+class FullTest extends WordSpec {
+  protected val codecs: GeneratedCalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
+  protected implicit val clock: Clock.Live.type = Clock.Live
+  protected val printer: Printer = Printer.spaces2
+  protected val runtime: DefaultRuntime = new DefaultRuntime {
+    override val Platform: Platform = PlatformLive.makeDefault().withReportFailure(_ => ())
+  }
+
 
 
   "transport" should {
@@ -67,7 +75,7 @@ class FullTest extends WordSpec {
     }
   }
 
-  private def makeClient(): GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json] = {
+  protected def makeClient(): GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json] = {
     import org.asynchttpclient.Dsl._
 
     val fakeTransport = new AHCHttpClient[IO, CustomClientCtx, CustomClientCtx](asyncHttpClient(config()), new URL("http://localhost:8080/http"), printer, new CtxDec[IO, ClientDispatcherError, Response, CustomClientCtx] {
@@ -88,7 +96,31 @@ class FullTest extends WordSpec {
     )
   }
 
-  private def makeServer(): Undertow = {
+  protected def makeWsClient(): GeneratedCalcClientDispatcher[ZIO[Clock, +?, +?], CustomClientCtx, CustomClientCtx, Json] = {
+    import org.asynchttpclient.Dsl._
+
+    val dec = new CtxDec[IO, ClientDispatcherError, EnvelopeOut, CustomClientCtx] {
+      override def decode(c: EnvelopeOut): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
+    }
+    val fakeTransport = new AHCWebsocketClient[CustomClientCtx, CustomClientCtx](asyncHttpClient(config()), new URI("ws://localhost:8080/ws"), printer, dec)
+
+
+    val hook = new ClientHook[ZIO[Clock, ?, ?], CustomClientCtx, Json] {
+
+
+//      override def onDecode[A: IRTCodec[*, Json]](res: ClientResponse[CustomClientCtx, Json], next: ClientResponse[CustomClientCtx, Json] => IO[ClientDispatcherError, A]): ZIO[Clock, ClientDispatcherError, A] = {
+//        println(s"Client hook: ${res.value}")
+//        super.onDecode(res, next)
+//      }
+    }
+    new GeneratedCalcClientDispatcher[ZIO[Clock, +?, +?], CustomClientCtx, CustomClientCtx, Json](
+      codecs,
+      fakeTransport,
+      hook
+    )
+  }
+
+  protected def makeServer(): Undertow = {
     val server = new CalcServerImpl[IO, CustomServerCtx]
     val serverctxdec = new CtxDec[IO, ServerTransportError, HttpRequestContext, CustomServerCtx] {
       override def decode(c: HttpRequestContext): IO[ServerTransportError, CustomServerCtx] = {
