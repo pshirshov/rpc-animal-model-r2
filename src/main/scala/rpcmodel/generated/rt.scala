@@ -164,6 +164,7 @@ class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, ResponseContext, 
       decodedRes.a
     }
 
+
     out.catchAll(e => F.terminate(ClientDispatcherException(e)))
   }
 

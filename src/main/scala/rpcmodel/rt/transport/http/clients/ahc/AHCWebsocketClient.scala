@@ -7,6 +7,7 @@ import java.util.function.BiFunction
 
 import io.circe.{Json, Printer}
 import io.netty.util.concurrent.{Future, GenericFutureListener}
+import org.asynchttpclient.netty.ws.NettyWebSocket
 import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.EnvelopeOut
 import zio.clock.Clock
 import zio.{Promise, Schedule, ZIO, ZSchedule}
@@ -37,7 +38,6 @@ class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseConte
   import io.circe.parser._
   import io.circe.syntax._
 
-  private lazy val ref = Ref.make(prepare())
   private val listener = new WebSocketListener() {
     override def onOpen(websocket: WebSocket): Unit = {
       //logger.debug(s"WS connection open: $websocket")
@@ -69,13 +69,21 @@ class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseConte
   }
   private val pending = new ConcurrentHashMap[UUID, Option[EnvelopeOut]]()
 
+  private lazy val ref = Ref.make[Option[NettyWebSocket]](None)
+
   override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): ZIO[Clock, ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
-
-
     import zio.duration._
     for {
       sock <- ref
-      s <- sock.get
+      ss <- sock.get
+      s <- ss match {
+        case Some(value) =>
+          IO.succeed(value)
+        case None =>
+          val conn = prepare()
+          sock.set(Some(conn))
+          IO.succeed(conn)
+      }
       id = UUID.randomUUID()
       envelope = EnvelopeIn(methodId, Map.empty, body, InvokationId(id.toString))
       _ <- IO.effectTotal(pending.put(id, None))

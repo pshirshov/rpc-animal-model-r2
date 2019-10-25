@@ -23,21 +23,12 @@ import zio._
 import zio.clock.Clock
 import zio.internal.{Platform, PlatformLive}
 
-object FullTest extends FullTest {
+object TestMain extends FullTest {
   def main(args: Array[String]): Unit = {
-    println("Server...")
-    val server = makeServer()
-    server.start()
 
-    //    println("Client...")
-    //    val httpClient = makeClient()
-    //    println(runtime.unsafeRunSync(httpClient.div(CustomClientCtx(), 6, 2)))
-    //    println(runtime.unsafeRunSync(httpClient.div(CustomClientCtx(), 6, 0)))
 
-    println("WS Client...")
-    val wsClient = makeWsClient()
-    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 2)))
-    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 0)))
+    //    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 2)))
+    //    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 0)))
   }
 }
 
@@ -50,12 +41,19 @@ class FullTest extends WordSpec {
   }
 
 
+  def withServer(test: Undertow => Unit): Unit = {
+    val server = makeServer()
+    try {
+      server.start()
+      test(server)
+    } finally {
+      server.stop()
+    }
+  }
 
   "transport" should {
-    "support method calls" in {
-      val server = makeServer()
-      try {
-        server.start()
+    "support http calls" in withServer {
+      _ =>
         val client = makeClient()
         assert(runtime.unsafeRunSync(client.div(CustomClientCtx(), 6, 2)) == Exit.Success(3))
 
@@ -66,12 +64,29 @@ class FullTest extends WordSpec {
           res
         }
 
-        assert(runtime.unsafeRunSync(negative).toEither  == Right("Got error"))
+        assert(runtime.unsafeRunSync(negative).toEither == Right("Got error"))
 
 
-      } finally {
-        server.stop()
-      }
+    }
+
+    "support websocket calls" in withServer {
+      server =>
+        val wsClient = makeWsClient()
+        val test = for {
+          a1 <- wsClient.div(CustomClientCtx(), 6, 2)
+          _ <- IO.effect(assert(a1 == 3))
+          _ <- IO.effect(server.stop())
+          a2 <- wsClient.div(CustomClientCtx(), 8, 2).sandbox.fold(_ => -1, _ => -2)
+          _ <- IO.effect(assert(a2 == -1))
+          _ <- IO.effect(server.start())
+          a3 <- wsClient.div(CustomClientCtx(), 15, 3)
+          _ <- IO.effect(assert(a3 == 5))
+        } yield {
+          (a1, a2, a3)
+        }
+
+        val result = runtime.unsafeRunSync(test)
+        assert(result.succeeded && result.toEither == Right(3, -1, 5))
     }
   }
 
@@ -108,10 +123,10 @@ class FullTest extends WordSpec {
     val hook = new ClientHook[ZIO[Clock, ?, ?], CustomClientCtx, Json] {
 
 
-//      override def onDecode[A: IRTCodec[*, Json]](res: ClientResponse[CustomClientCtx, Json], next: ClientResponse[CustomClientCtx, Json] => IO[ClientDispatcherError, A]): ZIO[Clock, ClientDispatcherError, A] = {
-//        println(s"Client hook: ${res.value}")
-//        super.onDecode(res, next)
-//      }
+      //      override def onDecode[A: IRTCodec[*, Json]](res: ClientResponse[CustomClientCtx, Json], next: ClientResponse[CustomClientCtx, Json] => IO[ClientDispatcherError, A]): ZIO[Clock, ClientDispatcherError, A] = {
+      //        println(s"Client hook: ${res.value}")
+      //        super.onDecode(res, next)
+      //      }
     }
     new GeneratedCalcClientDispatcher[ZIO[Clock, +?, +?], CustomClientCtx, CustomClientCtx, Json](
       codecs,
