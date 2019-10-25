@@ -1,9 +1,8 @@
 package rpcmodel.rt.transport.http.clients.ahc
 
-import java.net.{URI, URL}
+import java.net.URI
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.function.BiFunction
 
 import io.circe.{Json, Printer}
 import io.netty.util.concurrent.{Future, GenericFutureListener}
@@ -13,11 +12,8 @@ import zio.clock.Clock
 import zio.{Promise, Schedule, ZIO, ZSchedule}
 
 import scala.util.Try
-//import izumi.functional.bio.BIO._
-//import izumi.functional.bio.BIOAsync
+import org.asynchttpclient.AsyncHttpClient
 import org.asynchttpclient.ws.{WebSocket, WebSocketListener, WebSocketUpgradeHandler}
-import org.asynchttpclient.{AsyncHttpClient, BoundRequestBuilder, Response}
-import rpcmodel.rt.transport.codecs.IRTCodec
 import rpcmodel.rt.transport.dispatch.CtxDec
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
@@ -58,7 +54,7 @@ class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseConte
         data <- json.as[EnvelopeOut]
         id <- Try(UUID.fromString(data.id.id)).toEither
       } yield {
-        pending.put(id, Some(data))
+        pending.put(InvokationId(id.toString), Some(data))
       }
       res match {
         case Right(_) =>
@@ -67,7 +63,7 @@ class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseConte
       }
     }
   }
-  private val pending = new ConcurrentHashMap[UUID, Option[EnvelopeOut]]()
+  private val pending = new ConcurrentHashMap[InvokationId, Option[EnvelopeOut]]()
 
   private lazy val ref = Ref.make[Option[NettyWebSocket]](None)
 
@@ -84,8 +80,8 @@ class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseConte
           sock.set(Some(conn))
           IO.succeed(conn)
       }
-      id = UUID.randomUUID()
-      envelope = EnvelopeIn(methodId, Map.empty, body, InvokationId(id.toString))
+      id = InvokationId(UUID.randomUUID().toString)
+      envelope = EnvelopeIn(methodId, Map.empty, body, id)
       _ <- IO.effectTotal(pending.put(id, None))
       _ <- IO.effectAsync[ClientDispatcherError, Unit] {
         f =>
@@ -125,44 +121,13 @@ class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseConte
         case Some(r) => r
         case None => IO.fail(ClientDispatcherError.TimeoutException(id, methodId))
       }
-
-
-
-      //          resp <- IO.async[ClientDispatcherError, Response] {
-      //            f =>
-      //              val handler = new BiFunction[Response, Throwable, Unit] {
-      //                override def apply(t: Response, u: Throwable): Unit = {
-      //                  if (t != null) {
-      //                    f(Right(t))
-      //                  } else {
-      //                    f(Left(ClientDispatcherError.UnknownException(u)))
-      //                  }
-      //                }
-      //              }
-      //
-      //              prepare(methodId, body).execute().toCompletableFuture.handle[Unit](handler)
-      //              ()
-      //          }
-      //          c <- ctx.decode(resp)
-      //          body = resp.getResponseBody
-      //          parsed <- F.fromEither(parse(body))
-      //            .leftMap(e => ClientDispatcherError.ClientCodecFailure(List(IRTCodec.IRTCodecFailure.IRTParserException(e))))
     } yield {
       System.err.println(s"HERE: $u")
       u
-      //ClientResponse(c, ???)
     }
   }
 
-
-  //  private def prepare(methodId: GeneratedServerBase.MethodId, body: Json): BoundRequestBuilder = {
-  //    val url = new URL(target.getProtocol, target.getHost, target.getPort, s"${target.getFile}/${methodId.service.name}/${methodId.method.name}")
-  //    client
-  //      .preparePost(url.toString)
-  //      .setBody(body.printWith(printer))
-  //  }
-  private def prepare() = {
-    //val url = new URL(target.getProtocol, target.getHost, target.getPort, s"${target.getFile}/${methodId.service.name}/${methodId.method.name}")
+  private def prepare(): NettyWebSocket = {
     import scala.collection.JavaConverters._
 
     println("Connection...")

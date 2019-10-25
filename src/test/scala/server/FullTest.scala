@@ -3,6 +3,8 @@ package server
 import java.net.{URI, URL}
 
 import io.circe._
+import io.undertow.websockets.core.WebSocketChannel
+import io.undertow.websockets.spi.WebSocketHttpExchange
 import io.undertow.{Handlers, Undertow}
 import izumi.functional.bio.BIORunner
 import org.asynchttpclient.Response
@@ -16,7 +18,7 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient}
 import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.EnvelopeOut
-import rpcmodel.rt.transport.http.servers.undertow.{HttpRequestContext, HttpServerHandler, WSRequestContext, WsHandler}
+import rpcmodel.rt.transport.http.servers.undertow.{WsBuzzerTransport, HttpRequestContext, HttpServerHandler, SessionManager, SessionMetaProvider, WSRequestContext, WsEnvelope, WsHandler}
 import rpcmodel.rt.transport.http.servers.{BasicTransportErrorHandler, MethodIdExtractor}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
@@ -41,11 +43,11 @@ class FullTest extends WordSpec {
   }
 
 
-  def withServer(test: Undertow => Unit): Unit = {
-    val server = makeServer()
+  def withServer(test: (Undertow, SessionManager[IO, CustomWsMeta]) => Unit): Unit = {
+    val (server, sessman) = makeServer()
     try {
       server.start()
-      test(server)
+      test(server, sessman)
     } finally {
       server.stop()
     }
@@ -53,7 +55,7 @@ class FullTest extends WordSpec {
 
   "transport" should {
     "support http calls" in withServer {
-      _ =>
+      (_, _) =>
         val client = makeClient()
         assert(runtime.unsafeRunSync(client.div(CustomClientCtx(), 6, 2)) == Exit.Success(3))
 
@@ -70,7 +72,7 @@ class FullTest extends WordSpec {
     }
 
     "support websocket calls" in withServer {
-      server =>
+      (server, _) =>
         val wsClient = makeWsClient()
         val test = for {
           a1 <- wsClient.div(CustomClientCtx(), 6, 2)
@@ -86,6 +88,42 @@ class FullTest extends WordSpec {
         }
 
         val result = runtime.unsafeRunSync(test)
+        assert(result.succeeded && result.toEither == Right(3, -1, 5))
+    }
+
+    "support buzzer calls" in withServer {
+      (server, sessman) =>
+        val wsClient = makeWsClient()
+        val test = for {
+          a1 <- wsClient.div(CustomClientCtx(), 6, 2)
+          b = sessman.filterSessions(_ => true)
+          res <- {
+
+            val clients = b.map {
+              b =>
+                println(s"Buzzing ${b.id} ${b.meta}...")
+                val buzzertransport = new WsBuzzerTransport[CustomWsMeta, CustomClientCtx, CustomClientCtx](b, printer, new CtxDec[IO, ClientDispatcherError, EnvelopeOut, CustomClientCtx] {
+                  override def decode(c: EnvelopeOut): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
+                })
+
+                new GeneratedCalcClientDispatcher[ZIO[Clock, +?, +?], CustomClientCtx, CustomClientCtx, Json](
+                  codecs,
+                  buzzertransport,
+                )
+            }
+
+
+            ZIO.traverse(clients) {
+              c =>
+                c.div(CustomClientCtx(), 90, 3)
+            }
+          }
+        } yield {
+          res
+        }
+
+        val result = runtime.unsafeRunSync(test)
+        println(result)
         assert(result.succeeded && result.toEither == Right(3, -1, 5))
     }
   }
@@ -135,7 +173,7 @@ class FullTest extends WordSpec {
     )
   }
 
-  protected def makeServer(): Undertow = {
+  protected def makeServer() = {
     val server = new CalcServerImpl[IO, CustomServerCtx]
     val serverctxdec = new CtxDec[IO, ServerTransportError, HttpRequestContext, CustomServerCtx] {
       override def decode(c: HttpRequestContext): IO[ServerTransportError, CustomServerCtx] = {
@@ -165,14 +203,23 @@ class FullTest extends WordSpec {
         IO.succeed(CustomServerCtx(c.channel.getSourceAddress.toString, c.envelope.headers))
       }
     }
-    val handler2 = new WsHandler[IO, CustomServerCtx, Nothing](
+
+    val sessionManager = new SessionManager[IO, CustomWsMeta]
+    val sessionMetaProvider = new SessionMetaProvider[CustomWsMeta] {
+      override def extractInitial(exchange: WebSocketHttpExchange, channel: WebSocketChannel): CustomWsMeta = CustomWsMeta(List())
+
+      override def extract(exchange: WebSocketHttpExchange, channel: WebSocketChannel, previous: CustomWsMeta, envelopeIn: WsEnvelope.EnvelopeIn): Option[CustomWsMeta] = Some(CustomWsMeta(previous.history ++ List(envelopeIn.id.id)))
+    }
+    val handler2 = new WsHandler[IO, CustomWsMeta, CustomServerCtx, Nothing](
       wsctxdec,
       dispatchers,
       printer,
-      BasicTransportErrorHandler.withoutDomain
+      BasicTransportErrorHandler.withoutDomain,
+      sessionManager,
+      sessionMetaProvider,
     )
 
-    Undertow
+    val s = Undertow
       .builder()
       .addHttpListener(8080, "localhost")
       .setHandler(
@@ -182,5 +229,8 @@ class FullTest extends WordSpec {
       )
       .build()
 
+
+    (s, sessionManager)
   }
 }
+

@@ -15,6 +15,7 @@ import zio.internal.{Platform, PlatformLive}
 
 case class CustomServerCtx(ip: String, headers: Map[String, Seq[String]])
 case class CustomClientCtx()
+case class CustomWsMeta(history: List[String])
 
 class TransportModelTest extends WordSpec {
   private val codecs: GeneratedCalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
