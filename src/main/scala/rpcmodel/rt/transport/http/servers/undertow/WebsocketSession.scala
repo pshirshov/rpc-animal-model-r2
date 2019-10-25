@@ -64,7 +64,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
     val result = for {
       sbody <- F.pure(message.getData)
       decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
-
+      _ <- F.sync(println(s"got: $decoded"))
       out <- if (decoded.asObject.exists(_.toMap.contains("methodId"))) { // incoming request
         for {
           out <- dispatchRequest(channel, sbody, decoded)

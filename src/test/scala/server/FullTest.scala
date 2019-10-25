@@ -17,8 +17,8 @@ import rpcmodel.rt.transport.dispatch.client.ClientHook
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient}
-import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.EnvelopeOut
-import rpcmodel.rt.transport.http.servers.undertow.{WsBuzzerTransport, HttpRequestContext, HttpServerHandler, SessionManager, SessionMetaProvider, WSRequestContext, WsEnvelope, WsHandler}
+import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, EnvelopeOut}
+import rpcmodel.rt.transport.http.servers.undertow.{HttpRequestContext, HttpServerHandler, SessionManager, SessionMetaProvider, WSRequestContext, WsBuzzerTransport, WsEnvelope, WsHandler}
 import rpcmodel.rt.transport.http.servers.{BasicTransportErrorHandler, MethodIdExtractor}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
@@ -36,8 +36,9 @@ object TestMain extends FullTest {
 
 class FullTest extends WordSpec {
   protected val codecs: GeneratedCalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
-  protected implicit val clock: Clock.Live.type = Clock.Live
   protected val printer: Printer = Printer.spaces2
+
+  protected implicit val clock: Clock.Live.type = Clock.Live
   protected val runtime: DefaultRuntime = new DefaultRuntime {
     override val Platform: Platform = PlatformLive.makeDefault().withReportFailure(_ => ())
   }
@@ -124,7 +125,7 @@ class FullTest extends WordSpec {
 
         val result = runtime.unsafeRunSync(test)
         println(result)
-        assert(result.succeeded && result.toEither == Right(3, -1, 5))
+        assert(result.succeeded && result.toEither ==  Right(List(30)))
     }
   }
 
@@ -155,7 +156,27 @@ class FullTest extends WordSpec {
     val dec = new CtxDec[IO, ClientDispatcherError, EnvelopeOut, CustomClientCtx] {
       override def decode(c: EnvelopeOut): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
     }
-    val fakeTransport = new AHCWebsocketClient[CustomClientCtx, CustomClientCtx](asyncHttpClient(config()), new URI("ws://localhost:8080/ws"), printer, dec)
+
+    val server = new CalcServerImpl[ZIO[Clock, +?, +?], CustomClientCtx]
+    val serverDispatcher = new GeneratedCalcServerDispatcher[ZIO[Clock, +?, +?], CustomClientCtx, Json](
+      server,
+      codecs,
+    )
+
+    val dispatchers = Seq(serverDispatcher)
+    val serverctxdec = new CtxDec[ZIO[Clock, +?, +?], ServerTransportError, EnvelopeIn, CustomClientCtx] {
+      override def decode(c: EnvelopeIn): IO[ServerTransportError, CustomClientCtx] = {
+        IO.succeed(CustomClientCtx())
+      }
+    }
+    val fakeTransport = new AHCWebsocketClient[CustomClientCtx, CustomClientCtx, CustomClientCtx](
+      asyncHttpClient(config()),
+      new URI("ws://localhost:8080/ws"),
+      printer,
+      dec,
+      dispatchers,
+      serverctxdec,
+    )
 
 
     val hook = new ClientHook[ZIO[Clock, ?, ?], CustomClientCtx, Json] {
