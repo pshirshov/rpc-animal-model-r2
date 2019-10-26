@@ -17,14 +17,13 @@ import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.servers.AbstractServerHandler
-import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, EnvelopeOut, InvokationId}
+import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, EnvelopeIn, EnvelopeOut, InvokationId}
 import zio._
 
 import scala.concurrent.duration._
 import scala.util.Try
 
-class Repeat[F[+_, +_]: BIOAsync] {
+class Repeat[F[+ _, + _] : BIOAsync] {
   def repeat[E, V](action: F[E, Option[V]], onTimeout: => E, sleep: Duration, attempts: Int, maxAttempts: Int): F[E, V] = {
     action.flatMap {
       case Some(value) =>
@@ -39,7 +38,7 @@ class Repeat[F[+_, +_]: BIOAsync] {
   }
 }
 
-class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestContext, ResponseContext, ServerRequestContext]
+class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, RequestContext, ResponseContext, ServerRequestContext]
 (
   client: AsyncHttpClient,
   target: URI,
@@ -47,8 +46,6 @@ class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestC
   ctx: CtxDec[IO, ClientDispatcherError, EnvelopeOut, ResponseContext],
   val dispatchers: Seq[GeneratedServerBaseImpl[F, ServerRequestContext, Json]],
   override protected val dec: CtxDec[F, ServerTransportError, EnvelopeIn, ServerRequestContext],
-
-  hook: ClientRequestHook[RequestContext] = ClientRequestHook.Passthrough,
 ) extends ClientTransport[F, RequestContext, ResponseContext, Json] with AbstractServerHandler[F, ServerRequestContext, EnvelopeIn, Json] {
 
   import io.circe.parser._
@@ -106,7 +103,7 @@ class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestC
 
   private def handleRequest(value: Json): Unit = {
     val work = for {
-      data <- F.fromEither(value.as[EnvelopeIn])
+      data <- F.fromEither(value.as[EnvelopeIn]).leftMap(f => ServerTransportError.EnvelopeFormatError(value.toString(), f))
       out <- call(data, data.methodId, data.body)
       conn <- F.sync(session())
       _ <- F.sync(println(s"sending buzzer response $out"))
@@ -141,15 +138,17 @@ class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestC
       _ <- F.sync(pending.put(id, None))
       _ <- F.async[ClientDispatcherError, Unit] {
         f =>
-          s.sendTextFrame(envelope.asJson.printWith(printer)).addListener(new GenericFutureListener[Future[Void]] {
-            override def operationComplete(future: Future[Void]): Unit = {
-              if (future.isSuccess) {
-                f(Right(()))
-              } else {
-                f(Left(ClientDispatcherError.UnknownException(future.cause())))
+          s.sendTextFrame(envelope.asJson.printWith(printer))
+            .addListener(new GenericFutureListener[Future[Void]] {
+              override def operationComplete(future: Future[Void]): Unit = {
+                if (future.isSuccess) {
+                  f(Right(()))
+                } else {
+                  f(Left(ClientDispatcherError.UnknownException(future.cause())))
+                }
               }
-            }
-          })
+            })
+          ()
       }
 
       p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]])
@@ -195,7 +194,6 @@ class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestC
       out
     }
   }
-
 
 
   private def prepare(): NettyWebSocket = {

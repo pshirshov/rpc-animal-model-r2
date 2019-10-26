@@ -3,8 +3,6 @@ package server
 import java.net.{URI, URL}
 
 import io.circe._
-import io.undertow.websockets.core.WebSocketChannel
-import io.undertow.websockets.spi.WebSocketHttpExchange
 import io.undertow.{Handlers, Undertow}
 import izumi.functional.bio.BIORunner
 import org.asynchttpclient.Response
@@ -17,9 +15,11 @@ import rpcmodel.rt.transport.dispatch.client.ClientHook
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient}
-import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, EnvelopeOut}
-import rpcmodel.rt.transport.http.servers.undertow.{HttpRequestContext, HttpServerHandler, SessionManager, SessionMetaProvider, WSRequestContext, WsBuzzerTransport, WsEnvelope, WsHandler}
-import rpcmodel.rt.transport.http.servers.{BasicTransportErrorHandler, MethodIdExtractor}
+import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, EnvelopeIn, EnvelopeOut, MethodIdExtractor}
+import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
+import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WSRequestContext, WsResponseContext}
+import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
+import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
 import zio.clock.Clock
@@ -221,18 +221,16 @@ class FullTest extends WordSpec {
       }
     }
 
-    val sessionManager = new SessionManager[IO, CustomWsMeta]
     val sessionMetaProvider = new SessionMetaProvider[CustomWsMeta] {
-      override def extractInitial(exchange: WebSocketHttpExchange, channel: WebSocketChannel): CustomWsMeta = CustomWsMeta(List())
+      override def extractInitial(ctx: WsResponseContext): CustomWsMeta = CustomWsMeta(List())
 
-      override def extract(exchange: WebSocketHttpExchange, channel: WebSocketChannel, previous: CustomWsMeta, envelopeIn: WsEnvelope.EnvelopeIn): Option[CustomWsMeta] = Some(CustomWsMeta(previous.history ++ List(envelopeIn.id.id)))
+      override def extract(ctx: WsResponseContext, previous: CustomWsMeta, envelopeIn: EnvelopeIn): Option[CustomWsMeta] = Some(CustomWsMeta(previous.history ++ List(envelopeIn.id.id)))
     }
-    val handler2 = new WsHandler[IO, CustomWsMeta, CustomServerCtx, Nothing](
+    val handler2 = new WebsocketServerHandler[IO, CustomWsMeta, CustomServerCtx, Nothing](
       wsctxdec,
       dispatchers,
       printer,
       BasicTransportErrorHandler.withoutDomain,
-      sessionManager,
       sessionMetaProvider,
     )
 
@@ -247,7 +245,7 @@ class FullTest extends WordSpec {
       .build()
 
 
-    (s, sessionManager)
+    (s, handler2.sessionManager)
   }
 }
 

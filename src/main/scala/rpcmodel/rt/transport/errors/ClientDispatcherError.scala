@@ -2,7 +2,7 @@ package rpcmodel.rt.transport.errors
 
 import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
-import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.InvokationId
+import rpcmodel.rt.transport.http.servers.shared.InvokationId
 
 
 sealed trait ClientDispatcherError

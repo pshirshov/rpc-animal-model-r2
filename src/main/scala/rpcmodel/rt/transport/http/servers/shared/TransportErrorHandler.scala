@@ -1,4 +1,4 @@
-package rpcmodel.rt.transport.http.servers
+package rpcmodel.rt.transport.http.servers.shared
 
 import rpcmodel.rt.transport.errors.ServerTransportError
 

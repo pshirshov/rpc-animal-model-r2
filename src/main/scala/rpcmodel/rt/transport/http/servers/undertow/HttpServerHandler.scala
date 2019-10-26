@@ -8,11 +8,12 @@ import io.circe.{Json, Printer}
 import io.undertow.server.{HttpHandler, HttpServerExchange}
 import io.undertow.util.Headers
 import izumi.functional.bio.{BIOAsync, BIORunner}
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ServerWireResponse
 import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ServerWireResponse
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse, undertow}
+import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse}
+import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 
 // Server replies to incoming request:
 //   - CtxDec may extract additional data from request and pass it as C
@@ -52,7 +53,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
       })
       sbody = new String(body, StandardCharsets.UTF_8)
       decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
-      result <- call(undertow.HttpRequestContext(exchange, body, decoded), id, decoded)
+      result <- call(HttpRequestContext(exchange, body, decoded), id, decoded)
     } yield {
       result
     }

@@ -1,4 +1,4 @@
-package rpcmodel.rt.transport.http.servers
+package rpcmodel.rt.transport.http.servers.shared
 
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, MethodName, ServiceName}
 import rpcmodel.rt.transport.errors.ServerTransportError
@@ -13,7 +13,5 @@ object MethodIdExtractor {
       val segments = requestPath.split('/').takeRight(2)
       Right(MethodId(ServiceName(segments.head), MethodName(segments.last)))
     }
-
   }
-
 }

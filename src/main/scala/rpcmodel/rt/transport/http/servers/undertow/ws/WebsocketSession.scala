@@ -1,4 +1,4 @@
-package rpcmodel.rt.transport.http.servers.undertow
+package rpcmodel.rt.transport.http.servers.undertow.ws
 
 import java.time.LocalDateTime
 import java.util.UUID
@@ -9,39 +9,33 @@ import io.circe._
 import io.circe.parser.parse
 import io.circe.syntax._
 import io.undertow.websockets.core._
-import io.undertow.websockets.spi.WebSocketHttpExchange
 import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.CtxDec
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, EnvelopeOut, WsResponseContext}
-import rpcmodel.rt.transport.http.servers.{AbstractServerHandler, TransportErrorHandler, TransportResponse}
+import rpcmodel.rt.transport.http.servers.shared._
+import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WSRequestContext, WsResponseContext}
 
 
-case class WSRequestContext(channel: WebSocketChannel, envelope: EnvelopeIn, body: String)
 
 
-case class WsSessionId(id: UUID) extends AnyVal
-
-case class PendingResponse(envelope: EnvelopeOut, timestamp: LocalDateTime)
 
 class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors]
 (
+  ctx: WsResponseContext,
   override protected val dec: CtxDec[F, ServerTransportError, WSRequestContext, C],
   override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
-  channel: WebSocketChannel,
-  exchange: WebSocketHttpExchange,
   printer: Printer,
   handler: TransportErrorHandler[DomainErrors, WsResponseContext],
   sessions: SessionManager[F, Meta],
   sessionMetaProvider: SessionMetaProvider[Meta],
 ) extends AbstractReceiveListener with AbstractServerHandler[F, C, WSRequestContext, Json] {
 
-  import WsEnvelope._
   import izumi.functional.bio.BIO._
 
+
   val id: WsSessionId = WsSessionId(UUID.randomUUID())
-  val meta = new AtomicReference(sessionMetaProvider.extractInitial(exchange, channel))
+  val meta = new AtomicReference(sessionMetaProvider.extractInitial(ctx))
   val pending = new ConcurrentHashMap[InvokationId, PendingResponse]() // TODO: cleanups
 
 
@@ -59,7 +53,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
   }
 
   override def onFullTextMessage(channel: WebSocketChannel, message: BufferedTextMessage): Unit = {
-    assert(channel == this.channel)
+    assert(channel == this.ctx.channel)
 
     val result = for {
       sbody <- F.pure(message.getData)
@@ -69,7 +63,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
         for {
           out <- dispatchRequest(channel, sbody, decoded)
             .sandbox.leftMap(_.toEither)
-            .redeemPure(handler.onError(WsResponseContext(channel, exchange)), v => TransportResponse.Success(v))
+            .redeemPure(handler.onError(this.ctx), v => TransportResponse.Success(v))
           json = out.value.printWith(printer)
           _ <- doSend(json)
             .catchAll(t => F.pure(())) // TODO: handle exception?..
@@ -93,7 +87,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
     for {
       envelope <- F.fromEither(decoded.as[EnvelopeIn]).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
       _ <- F.sync {
-        sessionMetaProvider.extract(exchange, channel, meta.get(), envelope) match {
+        sessionMetaProvider.extract(this.ctx, meta.get(), envelope) match {
           case Some(value) =>
             println(s"new meta of $id=$value")
             meta.set(value)
@@ -120,7 +114,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
           }
         }
         println(s"Sending $value to client $id")
-        WebSockets.sendText(value, channel, websocketCallback, ())
+        WebSockets.sendText(value, this.ctx.channel, websocketCallback, ())
     }
   }
 }

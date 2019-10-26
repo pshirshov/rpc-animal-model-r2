@@ -1,4 +1,4 @@
-package rpcmodel.rt.transport.http.servers
+package rpcmodel.rt.transport.http.servers.shared
 
 import io.circe.derivation._
 import io.circe.{Codec, Json}
