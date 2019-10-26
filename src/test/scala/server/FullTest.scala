@@ -15,9 +15,10 @@ import rpcmodel.rt.transport.dispatch.client.ClientHook
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient}
-import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, EnvelopeIn, EnvelopeOut, MethodIdExtractor}
+import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
-import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WSRequestContext, WsResponseContext}
+import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsServerInRequestContext, WsConnection}
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
 import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
@@ -105,8 +106,8 @@ class FullTest extends WordSpec {
             val clients = b.map {
               b =>
                 println(s"Buzzing ${b.id} ${b.meta}...")
-                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, CustomClientCtx, CustomClientCtx](b, printer, new CtxDec[IO, ClientDispatcherError, EnvelopeOut, CustomClientCtx] {
-                  override def decode(c: EnvelopeOut): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
+                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, CustomClientCtx, CustomClientCtx](b, printer, new CtxDec[IO, ClientDispatcherError, AsyncSuccess, CustomClientCtx] {
+                  override def decode(c: AsyncSuccess): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
                 })
 
                 new GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json](
@@ -156,8 +157,8 @@ class FullTest extends WordSpec {
   protected def makeWsClient(): GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json] = {
     import org.asynchttpclient.Dsl._
 
-    val dec = new CtxDec[IO, ClientDispatcherError, EnvelopeOut, CustomClientCtx] {
-      override def decode(c: EnvelopeOut): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
+    val dec = new CtxDec[IO, ClientDispatcherError, AsyncSuccess, CustomClientCtx] {
+      override def decode(c: AsyncSuccess): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
     }
 
     val server = new CalcServerImpl[IO, CustomClientCtx]
@@ -167,8 +168,8 @@ class FullTest extends WordSpec {
     )
 
     val dispatchers = Seq(serverDispatcher)
-    val serverctxdec = new CtxDec[IO, ServerTransportError, EnvelopeIn, CustomClientCtx] {
-      override def decode(c: EnvelopeIn): IO[ServerTransportError, CustomClientCtx] = {
+    val serverctxdec = new CtxDec[IO, ServerTransportError, AsyncRequest, CustomClientCtx] {
+      override def decode(c: AsyncRequest): IO[ServerTransportError, CustomClientCtx] = {
         IO.succeed(CustomClientCtx())
       }
     }
@@ -215,16 +216,16 @@ class FullTest extends WordSpec {
     )
 
 
-    val wsctxdec = new CtxDec[IO, ServerTransportError, WSRequestContext, CustomServerCtx] {
-      override def decode(c: WSRequestContext): IO[ServerTransportError, CustomServerCtx] = {
-        IO.succeed(CustomServerCtx(c.channel.getSourceAddress.toString, c.envelope.headers))
+    val wsctxdec = new CtxDec[IO, ServerTransportError, WsServerInRequestContext, CustomServerCtx] {
+      override def decode(c: WsServerInRequestContext): IO[ServerTransportError, CustomServerCtx] = {
+        IO.succeed(CustomServerCtx(c.ctx.channel.getSourceAddress.toString, c.envelope.headers))
       }
     }
 
     val sessionMetaProvider = new SessionMetaProvider[CustomWsMeta] {
-      override def extractInitial(ctx: WsResponseContext): CustomWsMeta = CustomWsMeta(List())
+      override def extractInitial(ctx: WsConnection): CustomWsMeta = CustomWsMeta(List())
 
-      override def extract(ctx: WsResponseContext, previous: CustomWsMeta, envelopeIn: EnvelopeIn): Option[CustomWsMeta] = Some(CustomWsMeta(previous.history ++ List(envelopeIn.id.id)))
+      override def extract(ctx: WsConnection, previous: CustomWsMeta, envelopeIn: AsyncRequest): Option[CustomWsMeta] = Some(CustomWsMeta(previous.history ++ List(envelopeIn.id.id)))
     }
     val handler2 = new WebsocketServerHandler[IO, CustomWsMeta, CustomServerCtx, Nothing](
       wsctxdec,

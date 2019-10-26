@@ -17,7 +17,8 @@ import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, EnvelopeIn, EnvelopeOut, InvokationId}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
+import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId}
 import zio._
 
 import scala.concurrent.duration._
@@ -43,10 +44,10 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
   client: AsyncHttpClient,
   target: URI,
   printer: Printer,
-  ctx: CtxDec[IO, ClientDispatcherError, EnvelopeOut, ResponseContext],
+  ctx: CtxDec[IO, ClientDispatcherError, AsyncSuccess, ResponseContext],
   val dispatchers: Seq[GeneratedServerBaseImpl[F, ServerRequestContext, Json]],
-  override protected val dec: CtxDec[F, ServerTransportError, EnvelopeIn, ServerRequestContext],
-) extends ClientTransport[F, RequestContext, ResponseContext, Json] with AbstractServerHandler[F, ServerRequestContext, EnvelopeIn, Json] {
+  override protected val dec: CtxDec[F, ServerTransportError, AsyncRequest, ServerRequestContext],
+) extends ClientTransport[F, RequestContext, ResponseContext, Json] with AbstractServerHandler[F, ServerRequestContext, AsyncRequest, Json] {
 
   import io.circe.parser._
   import io.circe.syntax._
@@ -103,11 +104,11 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
 
   private def handleRequest(value: Json): Unit = {
     val work = for {
-      data <- F.fromEither(value.as[EnvelopeIn]).leftMap(f => ServerTransportError.EnvelopeFormatError(value.toString(), f))
+      data <- F.fromEither(value.as[AsyncRequest]).leftMap(f => ServerTransportError.EnvelopeFormatError(value.toString(), f))
       out <- call(data, data.methodId, data.body)
       conn <- F.sync(session())
       _ <- F.sync(println(s"sending buzzer response $out"))
-      _ <- F.sync(conn.sendTextFrame(EnvelopeOut(Map.empty, out.value, data.id).asJson.printWith(printer)))
+      _ <- F.sync(conn.sendTextFrame(AsyncSuccess(Map.empty, out.value, data.id).asJson.printWith(printer)))
     } yield {
 
     }
@@ -118,7 +119,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
 
   private def handleResponse(value: Json): Unit = {
     for {
-      data <- value.as[EnvelopeOut]
+      data <- value.as[AsyncSuccess]
       id <- Try(UUID.fromString(data.id.id)).toEither
     } yield {
       pending.put(InvokationId(id.toString), Some(data))
@@ -127,14 +128,14 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
     ()
   }
 
-  private val pending = new ConcurrentHashMap[InvokationId, Option[EnvelopeOut]]()
+  private val pending = new ConcurrentHashMap[InvokationId, Option[AsyncSuccess]]()
 
   override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
     val trans = implicitly[BIOTransZio[F]]
     for {
       s <- F.sync(session())
       id = InvokationId(UUID.randomUUID().toString)
-      envelope = EnvelopeIn(methodId, Map.empty, body, id)
+      envelope = AsyncRequest(methodId, Map.empty, body, id)
       _ <- F.sync(pending.put(id, None))
       _ <- F.async[ClientDispatcherError, Unit] {
         f =>

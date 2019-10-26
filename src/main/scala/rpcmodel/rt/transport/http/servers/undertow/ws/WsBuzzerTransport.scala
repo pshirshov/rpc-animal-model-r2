@@ -11,7 +11,8 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.http.clients.ahc.Repeat
-import rpcmodel.rt.transport.http.servers.shared.{EnvelopeIn, EnvelopeOut, InvokationId}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
+import rpcmodel.rt.transport.http.servers.shared.InvokationId
 import zio._
 
 import scala.concurrent.duration._
@@ -20,7 +21,7 @@ class WsBuzzerTransport[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, Meta, Req
 (
   client: WsSessionBuzzer[F, Meta],
   printer: Printer,
-  ctx: CtxDec[F, ClientDispatcherError, EnvelopeOut, ResponseContext],
+  ctx: CtxDec[F, ClientDispatcherError, AsyncSuccess, ResponseContext],
 ) extends ClientTransport[F, RequestContext, ResponseContext, Json] {
   import io.circe.syntax._
 
@@ -30,7 +31,7 @@ class WsBuzzerTransport[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, Meta, Req
     //import zio.duration._
     for {
       id <- F.pure(InvokationId(UUID.randomUUID().toString))
-      envelope = EnvelopeIn(methodId, Map.empty, body, id)
+      envelope = AsyncRequest(methodId, Map.empty, body, id)
       _ <- client.send(envelope.asJson.printWith(printer)).leftMap(e => ClientDispatcherError.UnknownException(e))
       p <-  trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]])
       check = trans.ofZio(for {

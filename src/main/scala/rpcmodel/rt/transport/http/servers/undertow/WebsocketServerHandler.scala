@@ -9,22 +9,22 @@ import rpcmodel.rt.transport.dispatch.CtxDec
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.TransportErrorHandler
-import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WSRequestContext, WsResponseContext}
+import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsServerInRequestContext, WsConnection}
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WebsocketSession}
 
 class WebsocketServerHandler[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors](
-                                                                      dec: CtxDec[F, ServerTransportError, WSRequestContext, C],
-                                                                      dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
-                                                                      printer: Printer,
-                                                                      onDomainError: TransportErrorHandler[DomainErrors, WsResponseContext],
-                                                                      sessionMetaProvider: SessionMetaProvider[Meta]
+                                                                                         dec: CtxDec[F, ServerTransportError, WsServerInRequestContext, C],
+                                                                                         dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
+                                                                                         printer: Printer,
+                                                                                         onDomainError: TransportErrorHandler[DomainErrors, WsConnection],
+                                                                                         sessionMetaProvider: SessionMetaProvider[Meta]
                                                                     ) extends WebSocketConnectionCallback {
   val sessionManager = new SessionManager[F, Meta]()
 
   override def onConnect(exchange: WebSocketHttpExchange, channel: WebSocketChannel): Unit = {
 
     val session = new WebsocketSession(
-      WsResponseContext(channel, exchange),
+      WsConnection(channel, exchange),
       dec,
       dispatchers,
       printer,
