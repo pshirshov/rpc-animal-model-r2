@@ -42,6 +42,7 @@ class FullTest extends WordSpec {
   protected val runtime: DefaultRuntime = new DefaultRuntime {
     override val Platform: Platform = PlatformLive.makeDefault().withReportFailure(_ => ())
   }
+  implicit val runner: BIORunner.ZIORunner = BIORunner.createZIO(PlatformLive.makeDefault()) //.withReportFailure(_ => ())
 
 
   def withServer(test: (Undertow, SessionManager[IO, CustomWsMeta]) => Unit): Unit = {
@@ -68,7 +69,7 @@ class FullTest extends WordSpec {
         }
 
         assert(runtime.unsafeRunSync(negative).toEither == Right("Got error"))
-
+        ()
 
     }
 
@@ -89,11 +90,12 @@ class FullTest extends WordSpec {
         }
 
         val result = runtime.unsafeRunSync(test)
-        assert(result.succeeded && result.toEither == Right(3, -1, 5))
+        assert(result.succeeded && result.toEither == Right((3, -1, 5)))
+        ()
     }
 
     "support buzzer calls" in withServer {
-      (server, sessman) =>
+      (_, sessman) =>
         val wsClient = makeWsClient()
         val test = for {
           a1 <- wsClient.div(CustomClientCtx(), 6, 2)
@@ -103,11 +105,11 @@ class FullTest extends WordSpec {
             val clients = b.map {
               b =>
                 println(s"Buzzing ${b.id} ${b.meta}...")
-                val buzzertransport = new WsBuzzerTransport[CustomWsMeta, CustomClientCtx, CustomClientCtx](b, printer, new CtxDec[IO, ClientDispatcherError, EnvelopeOut, CustomClientCtx] {
+                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, CustomClientCtx, CustomClientCtx](b, printer, new CtxDec[IO, ClientDispatcherError, EnvelopeOut, CustomClientCtx] {
                   override def decode(c: EnvelopeOut): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
                 })
 
-                new GeneratedCalcClientDispatcher[ZIO[Clock, +?, +?], CustomClientCtx, CustomClientCtx, Json](
+                new GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json](
                   codecs,
                   buzzertransport,
                 )
@@ -126,6 +128,7 @@ class FullTest extends WordSpec {
         val result = runtime.unsafeRunSync(test)
         println(result)
         assert(result.succeeded && result.toEither ==  Right(List(30)))
+        ()
     }
   }
 
@@ -150,26 +153,27 @@ class FullTest extends WordSpec {
     )
   }
 
-  protected def makeWsClient(): GeneratedCalcClientDispatcher[ZIO[Clock, +?, +?], CustomClientCtx, CustomClientCtx, Json] = {
+  protected def makeWsClient(): GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json] = {
     import org.asynchttpclient.Dsl._
 
     val dec = new CtxDec[IO, ClientDispatcherError, EnvelopeOut, CustomClientCtx] {
       override def decode(c: EnvelopeOut): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
     }
 
-    val server = new CalcServerImpl[ZIO[Clock, +?, +?], CustomClientCtx]
-    val serverDispatcher = new GeneratedCalcServerDispatcher[ZIO[Clock, +?, +?], CustomClientCtx, Json](
+    val server = new CalcServerImpl[IO, CustomClientCtx]
+    val serverDispatcher = new GeneratedCalcServerDispatcher[IO, CustomClientCtx, Json](
       server,
       codecs,
     )
 
     val dispatchers = Seq(serverDispatcher)
-    val serverctxdec = new CtxDec[ZIO[Clock, +?, +?], ServerTransportError, EnvelopeIn, CustomClientCtx] {
+    val serverctxdec = new CtxDec[IO, ServerTransportError, EnvelopeIn, CustomClientCtx] {
       override def decode(c: EnvelopeIn): IO[ServerTransportError, CustomClientCtx] = {
         IO.succeed(CustomClientCtx())
       }
     }
-    val fakeTransport = new AHCWebsocketClient[CustomClientCtx, CustomClientCtx, CustomClientCtx](
+
+    val fakeTransport = new AHCWebsocketClient[IO, CustomClientCtx, CustomClientCtx, CustomClientCtx](
       asyncHttpClient(config()),
       new URI("ws://localhost:8080/ws"),
       printer,
@@ -179,15 +183,8 @@ class FullTest extends WordSpec {
     )
 
 
-    val hook = new ClientHook[ZIO[Clock, ?, ?], CustomClientCtx, Json] {
-
-
-      //      override def onDecode[A: IRTCodec[*, Json]](res: ClientResponse[CustomClientCtx, Json], next: ClientResponse[CustomClientCtx, Json] => IO[ClientDispatcherError, A]): ZIO[Clock, ClientDispatcherError, A] = {
-      //        println(s"Client hook: ${res.value}")
-      //        super.onDecode(res, next)
-      //      }
-    }
-    new GeneratedCalcClientDispatcher[ZIO[Clock, +?, +?], CustomClientCtx, CustomClientCtx, Json](
+    val hook = new ClientHook[IO, CustomClientCtx, Json] {}
+    new GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json](
       codecs,
       fakeTransport,
       hook
@@ -208,7 +205,6 @@ class FullTest extends WordSpec {
 
     val dispatchers = Seq(serverDispatcher)
 
-    implicit val runner: BIORunner.ZIORunner = BIORunner.createZIO(PlatformLive.makeDefault()) //.withReportFailure(_ => ())
 
     val handler1 = new HttpServerHandler[IO, CustomServerCtx, Nothing](
       dispatchers,

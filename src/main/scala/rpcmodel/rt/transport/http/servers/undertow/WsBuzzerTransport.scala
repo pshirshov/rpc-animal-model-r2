@@ -3,6 +3,7 @@ package rpcmodel.rt.transport.http.servers.undertow
 import java.util.UUID
 
 import io.circe.{Json, Printer}
+import izumi.functional.bio.{BIOAsync, BIORunner, BIOTransZio}
 import rpcmodel.rt.transport.dispatch.CtxDec
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
@@ -12,32 +13,33 @@ import rpcmodel.rt.transport.http.clients.ahc.ClientRequestHook
 import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, EnvelopeOut, InvokationId}
 import zio._
 import zio.clock.Clock
+import izumi.functional.bio.BIO._
 
-
-class WsBuzzerTransport[ /*F[+_, +_]: BIOAsync,*/ Meta, RequestContext, ResponseContext]
+class WsBuzzerTransport[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, Meta, RequestContext, ResponseContext]
 (
-  client: WsBuzzer[IO, Meta],
+  client: WsBuzzer[F, Meta],
   printer: Printer,
-  ctx: CtxDec[IO, ClientDispatcherError, EnvelopeOut, ResponseContext],
+  ctx: CtxDec[F, ClientDispatcherError, EnvelopeOut, ResponseContext],
   hook: ClientRequestHook[RequestContext] = ClientRequestHook.Passthrough,
-) extends ClientTransport[ZIO[Clock, +?, +?], RequestContext, ResponseContext, Json] {
+) extends ClientTransport[F, RequestContext, ResponseContext, Json] {
   import io.circe.syntax._
 
+  val trans = implicitly[BIOTransZio[F]]
 
-  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): ZIO[Clock, ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
+  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
     import zio.duration._
     for {
-      id <- IO.succeed(InvokationId(UUID.randomUUID().toString))
+      id <- F.pure(InvokationId(UUID.randomUUID().toString))
       envelope = EnvelopeIn(methodId, Map.empty, body, id)
-      _ <- client.send(envelope.asJson.printWith(printer)).mapError(e => ClientDispatcherError.UnknownException(e))
-      p <- Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]]
+      _ <- client.send(envelope.asJson.printWith(printer)).leftMap(e => ClientDispatcherError.UnknownException(e))
+      p <-  trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]])
       check = for {
-        status <- client.takePending(id)
+        status <- trans.toZio(client.takePending(id))
         _ <- status match {
           case Some(value) =>
             for {
-              responseContext <- ctx.decode(value.envelope)
-              _ <- p.complete(IO.succeed(ClientResponse(responseContext, value.envelope.body)))
+              responseContext <- trans.toZio(ctx.decode(value.envelope))
+              _ <-  p.complete(IO.succeed(ClientResponse(responseContext, value.envelope.body)))
             } yield {
 
             }
@@ -49,13 +51,13 @@ class WsBuzzerTransport[ /*F[+_, +_]: BIOAsync,*/ Meta, RequestContext, Response
       } yield {
         done
       }
-      _ <- check.repeat((Schedule.spaced(100.millis) && ZSchedule.elapsed.whileOutput(_ < 2.seconds)) && Schedule.doUntil(a => a))
-      result <- p.poll
+      _ <- trans.ofZio(check.repeat((Schedule.spaced(100.millis) && ZSchedule.elapsed.whileOutput(_ < 2.seconds)) && Schedule.doUntil(a => a)).provide(Clock.Live))
+      result <- trans.ofZio(p.poll)
       u <- result match {
-        case Some(r) => r
+        case Some(r) => trans.ofZio(r)
         case None =>
           println("Buzzer response timeout")
-          IO.fail(ClientDispatcherError.TimeoutException(id, methodId))
+          F.fail(ClientDispatcherError.TimeoutException(id, methodId))
       }
     } yield {
       System.err.println(s"WS: $u")

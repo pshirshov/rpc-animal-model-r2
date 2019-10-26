@@ -4,50 +4,43 @@ import java.net.URI
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
-import java.util.function.UnaryOperator
 
 import io.circe.{Json, Printer}
 import io.netty.util.concurrent.{Future, GenericFutureListener}
-import izumi.functional.bio.BIOAsync
-import org.asynchttpclient.netty.ws.NettyWebSocket
-import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.EnvelopeOut
-import zio.clock.Clock
-import zio.{DefaultRuntime, IO, Promise, Ref, Schedule, ZIO, ZSchedule}
-
-import scala.util.Try
+import izumi.functional.bio.BIO._
+import izumi.functional.bio.{BIOAsync, BIOExit, BIORunner, BIOTransZio}
 import org.asynchttpclient.AsyncHttpClient
+import org.asynchttpclient.netty.ws.NettyWebSocket
 import org.asynchttpclient.ws.{WebSocket, WebSocketListener, WebSocketUpgradeHandler}
 import rpcmodel.rt.transport.dispatch.CtxDec
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
-import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
+import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.servers.AbstractServerHandler
-import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, InvokationId}
-import zio.internal.{Platform, PlatformLive}
+import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, EnvelopeOut, InvokationId}
+import zio._
+import zio.clock.Clock
 
+import scala.util.Try
 
-class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseContext, ServerRequestContext]
+class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestContext, ResponseContext, ServerRequestContext]
 (
   client: AsyncHttpClient,
   target: URI,
   printer: Printer,
   ctx: CtxDec[IO, ClientDispatcherError, EnvelopeOut, ResponseContext],
-  val dispatchers: Seq[GeneratedServerBaseImpl[ZIO[Clock, +?, +?], ServerRequestContext, Json]],
-  override protected val dec: CtxDec[ZIO[Clock, ?, ?], ServerTransportError, EnvelopeIn, ServerRequestContext],
+  val dispatchers: Seq[GeneratedServerBaseImpl[F, ServerRequestContext, Json]],
+  override protected val dec: CtxDec[F, ServerTransportError, EnvelopeIn, ServerRequestContext],
 
   hook: ClientRequestHook[RequestContext] = ClientRequestHook.Passthrough,
-) extends ClientTransport[ZIO[Clock, ?, ?], RequestContext, ResponseContext, Json] with AbstractServerHandler[ZIO[Clock, +?, +?], ServerRequestContext, EnvelopeIn, Json] {
+) extends ClientTransport[F, RequestContext, ResponseContext, Json] with AbstractServerHandler[F, ServerRequestContext, EnvelopeIn, Json] {
 
   import io.circe.parser._
   import io.circe.syntax._
 
 
-  override protected implicit def bioAsync: BIOAsync[ZIO[Clock, +*, +*]] = {
-    implicit val clock: Clock.Live.type = Clock.Live
-
-    BIOAsync.BIOAsyncZio
-  }
+  override protected def bioAsync: BIOAsync[F] = implicitly
 
   private val sess = new AtomicReference[NettyWebSocket](null)
 
@@ -90,33 +83,28 @@ class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseConte
           if (value.asObject.exists(_.contains("methodId"))) {
             handleRequest(value)
           } else {
-            handleResponse(value) match {
-              case Right(_) =>
-              case Left(_) => // TODO
-            }
+            handleResponse(value)
           }
       }
     }
   }
 
-  val runtime: DefaultRuntime = new DefaultRuntime {
-    override val Platform: Platform = PlatformLive.makeDefault().withReportFailure(_ => ())
-  }
-  private def handleRequest(value: Json): Either[Throwable, Unit] = {
+  private def handleRequest(value: Json): Unit = {
     val work = for {
-      data <- IO.fromEither(value.as[EnvelopeIn])
+      data <- F.fromEither(value.as[EnvelopeIn])
       out <- call(data, data.methodId, data.body)
-      conn <- IO.effectTotal(session())
-      _ <- IO.effect(println(s"sending buzzer response $out"))
-      _ <- IO.effect(conn.sendTextFrame(EnvelopeOut(Map.empty, out.value, data.id).asJson.printWith(printer)))
+      conn <- F.sync(session())
+      _ <- F.sync(println(s"sending buzzer response $out"))
+      _ <- F.sync(conn.sendTextFrame(EnvelopeOut(Map.empty, out.value, data.id).asJson.printWith(printer)))
     } yield {
 
     }
 
-    runtime.unsafeRunSync(work).toEither
+    BIORunner[F].unsafeRunSyncAsEither(work)
+    ()
   }
 
-  private def handleResponse(value: Json): Either[Throwable, Unit] = {
+  private def handleResponse(value: Json): Unit = {
     for {
       data <- value.as[EnvelopeOut]
       id <- Try(UUID.fromString(data.id.id)).toEither
@@ -128,29 +116,28 @@ class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseConte
 
   private val pending = new ConcurrentHashMap[InvokationId, Option[EnvelopeOut]]()
 
-  //private lazy val ref = Ref.make[Option[NettyWebSocket]](None)
-
-  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): ZIO[Clock, ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
+  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
     import zio.duration._
+    val trans = implicitly[BIOTransZio[F]]
     for {
-      s <- IO.effectTotal(session())
+      s <- F.sync(session())
       id = InvokationId(UUID.randomUUID().toString)
       envelope = EnvelopeIn(methodId, Map.empty, body, id)
-      _ <- IO.effectTotal(pending.put(id, None))
-      _ <- IO.effectAsync[ClientDispatcherError, Unit] {
+      _ <- F.sync(pending.put(id, None))
+      _ <- F.async[ClientDispatcherError, Unit] {
         f =>
           s.sendTextFrame(envelope.asJson.printWith(printer)).addListener(new GenericFutureListener[Future[Void]] {
             override def operationComplete(future: Future[Void]): Unit = {
               if (future.isSuccess) {
-                f(IO.unit)
+                f(Right(()))
               } else {
-                f(IO.fail(ClientDispatcherError.UnknownException(future.cause())))
+                f(Left(ClientDispatcherError.UnknownException(future.cause())))
               }
             }
           })
       }
 
-      p <- Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]]
+      p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]])
       check = for {
         status <- IO.effectTotal(pending.get(id))
         _ <- status match {
@@ -169,11 +156,11 @@ class AHCWebsocketClient[ /*F[+_, +_]: BIOAsync,*/ RequestContext, ResponseConte
       } yield {
         done
       }
-      _ <- check.repeat((Schedule.spaced(100.millis) && ZSchedule.elapsed.whileOutput(_ < 2.seconds)) && Schedule.doUntil(a => a))
-      result <- p.poll
+      _ <- trans.ofZio(check.repeat((Schedule.spaced(100.millis) && ZSchedule.elapsed.whileOutput(_ < 2.seconds)) && Schedule.doUntil(a => a)).provide(Clock.Live))
+      result <- trans.ofZio(p.poll)
       u <- result match {
-        case Some(r) => r
-        case None => IO.fail(ClientDispatcherError.TimeoutException(id, methodId))
+        case Some(r) => trans.ofZio(r)
+        case None => F.fail(ClientDispatcherError.TimeoutException(id, methodId))
       }
     } yield {
       System.err.println(s"HERE: $u")
