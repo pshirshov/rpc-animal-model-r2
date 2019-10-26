@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicReference
 import io.circe.{Json, Printer}
 import io.netty.util.concurrent.{Future, GenericFutureListener}
 import izumi.functional.bio.BIO._
-import izumi.functional.bio.{BIOAsync, BIOExit, BIORunner, BIOTransZio}
+import izumi.functional.bio.{BIOAsync, BIORunner, BIOTransZio}
 import org.asynchttpclient.AsyncHttpClient
 import org.asynchttpclient.netty.ws.NettyWebSocket
 import org.asynchttpclient.ws.{WebSocket, WebSocketListener, WebSocketUpgradeHandler}
@@ -20,9 +20,24 @@ import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError
 import rpcmodel.rt.transport.http.servers.AbstractServerHandler
 import rpcmodel.rt.transport.http.servers.undertow.WsEnvelope.{EnvelopeIn, EnvelopeOut, InvokationId}
 import zio._
-import zio.clock.Clock
 
+import scala.concurrent.duration._
 import scala.util.Try
+
+class Repeat[F[+_, +_]: BIOAsync] {
+  def repeat[E, V](action: F[E, Option[V]], onTimeout: => E, sleep: Duration, attempts: Int, maxAttempts: Int): F[E, V] = {
+    action.flatMap {
+      case Some(value) =>
+        F.pure(value)
+      case None =>
+        if (attempts <= maxAttempts) {
+          F.sleep(sleep) *> repeat(action, onTimeout, sleep, attempts + 1, maxAttempts)
+        } else {
+          F.fail(onTimeout)
+        }
+    }
+  }
+}
 
 class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestContext, ResponseContext, ServerRequestContext]
 (
@@ -110,14 +125,14 @@ class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestC
       id <- Try(UUID.fromString(data.id.id)).toEither
     } yield {
       pending.put(InvokationId(id.toString), Some(data))
-      ()
     }
+
+    ()
   }
 
   private val pending = new ConcurrentHashMap[InvokationId, Option[EnvelopeOut]]()
 
   override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
-    import zio.duration._
     val trans = implicitly[BIOTransZio[F]]
     for {
       s <- F.sync(session())
@@ -138,7 +153,8 @@ class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestC
       }
 
       p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]])
-      check = for {
+
+      check = trans.ofZio(for {
         status <- IO.effectTotal(pending.get(id))
         _ <- status match {
           case Some(value) =>
@@ -153,20 +169,34 @@ class AHCWebsocketClient[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, RequestC
             IO.unit
         }
         done <- p.isDone
+        out <- if (done) {
+          for {
+            result <- p.poll
+            f <- result match {
+              case Some(value) =>
+                value.map(f => Some(f))
+              case None =>
+                IO.succeed(None)
+            }
+          } yield {
+            f
+          }
+
+        } else {
+          IO.succeed(None)
+        }
       } yield {
-        done
-      }
-      _ <- trans.ofZio(check.repeat((Schedule.spaced(100.millis) && ZSchedule.elapsed.whileOutput(_ < 2.seconds)) && Schedule.doUntil(a => a)).provide(Clock.Live))
-      result <- trans.ofZio(p.poll)
-      u <- result match {
-        case Some(r) => trans.ofZio(r)
-        case None => F.fail(ClientDispatcherError.TimeoutException(id, methodId))
-      }
+        out
+      })
+
+      out <- new Repeat[F].repeat(check, ClientDispatcherError.TimeoutException(id, methodId), 100.millis, 0, 20)
     } yield {
-      System.err.println(s"HERE: $u")
-      u
+      System.err.println(s"HERE: $out")
+      out
     }
   }
+
+
 
   private def prepare(): NettyWebSocket = {
     import scala.collection.JavaConverters._
