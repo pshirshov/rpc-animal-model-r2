@@ -8,27 +8,25 @@ import izumi.functional.bio.BIO._
 import izumi.functional.bio.BIOAsync
 import org.asynchttpclient.{AsyncHttpClient, BoundRequestBuilder, Response}
 import rpcmodel.rt.transport.codecs.IRTCodec
-import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 
 
-class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext, ResponseContext]
+class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext]
 (
   client: AsyncHttpClient,
   target: URL,
   printer: Printer,
-  responseContextProvider: ContextProvider[F, ClientDispatcherError, Response, ResponseContext],
   hook: ClientRequestHook[RequestContext, BoundRequestBuilder],
-) extends ClientTransport[F, RequestContext, ResponseContext, Json] {
+) extends ClientTransport[F, RequestContext, Json] {
 
   override def connect(): F[ClientDispatcherError, Unit] = F.unit
 
   override def disconnect(): F[ClientDispatcherError, Unit] = F.unit
 
-  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
+  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[Json]] = {
     import io.circe.parser._
 
     for {
@@ -49,12 +47,11 @@ class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext, ResponseContext]
           req.execute().toCompletableFuture.handle[Unit](handler)
           ()
       }
-      responseContext <- responseContextProvider.decode(resp)
       body = resp.getResponseBody
       parsed <- F.fromEither(parse(body))
         .leftMap(e => ClientDispatcherError.ClientCodecFailure(List(IRTCodec.IRTCodecFailure.IRTParserException(e))))
     } yield {
-      ClientResponse(responseContext, parsed)
+      ClientResponse( parsed)
     }
   }
 

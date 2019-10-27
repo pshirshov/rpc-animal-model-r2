@@ -23,17 +23,16 @@ import zio._
 import scala.util.Try
 
 
-class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, ResponseContext, BuzzerRequestContext]
+class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsClientRequestContext, BuzzerRequestContext]
 (
   client: AsyncHttpClient,
   target: URI,
   pollingConfig: PollingConfig,
   printer: Printer,
-  hook: ClientRequestHook[WsClientContext, AsyncRequest],
-  clientContextProvider: ContextProvider[F, ClientDispatcherError, AsyncResponse, ResponseContext],
+  hook: ClientRequestHook[WsClientRequestContext, AsyncRequest],
   buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
   buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
-) extends ClientTransport[F, WsClientContext, ResponseContext, Json]
+) extends ClientTransport[F, WsClientRequestContext, Json]
   with AbstractServerHandler[F, BuzzerRequestContext, AsyncRequest, Json]
   with AHCWSListener {
 
@@ -68,12 +67,12 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Respo
     }
   }
 
-  override def dispatch(c: WsClientContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
+  override def dispatch(c: WsClientRequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[Json]] = {
     val trans = implicitly[BIOTransZio[F]]
     for {
       s <- F.sync(session.get())
       id = InvokationId(UUID.randomUUID().toString)
-      envelope = hook.onRequest(c, methodId, body, AsyncRequest(methodId, c.headers, body, id))
+      envelope = hook.onRequest(c, methodId, body, AsyncRequest(methodId, Map.empty, body, id))
       _ <- F.sync(pending.put(id, None))
       _ <- F.async[ClientDispatcherError, Unit] {
         f =>
@@ -90,17 +89,16 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Respo
           ()
       }
 
-      p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]])
+      p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[Json]])
 
       check = trans.ofZio(for {
         status <- IO.effectTotal(pending.get(id))
         _ <- status match {
           case Some(value) =>
             for {
-              responseContext <- trans.toZio(clientContextProvider.decode(value))
               _ <- value match {
                 case s: AsyncSuccess =>
-                  p.complete(IO.succeed(ClientResponse(responseContext, s.body)))
+                  p.complete(IO.succeed(ClientResponse(s.body)))
                 case f: AsyncFailure =>
                   p.complete(IO.fail(ClientDispatcherError.ServerError(f.error)))
               }
@@ -163,7 +161,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Respo
 
     }
 
-    BIORunner[F].unsafeRunAsyncAsEither(work)(_ => ())
+    BIORunner[F].unsafeRunAsyncAsEither(work)(_ => ()) // TODO: handle exception?..
   }
 
   private def handleResponse(value: Json): Unit = {

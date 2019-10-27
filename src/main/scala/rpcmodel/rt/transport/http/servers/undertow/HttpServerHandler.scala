@@ -67,7 +67,6 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
             exchange.setStatusCode(500)
         }
       }
-      _ <- F.sync(Thread.sleep(1000))
       _ <- F.sync(exchange.getResponseSender.send(json))
       _ <- F.sync(exchange.endExchange())
     } yield {
@@ -75,8 +74,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
 
     exchange.dispatch(new Runnable {
       override def run(): Unit = {
-        // TODO: log failures
-        BIORunner[F].unsafeRunAsyncAsEither(out)(_ => ())
+        BIORunner[F].unsafeRunAsyncAsEither(out)(_ => ()) // TODO: handle exception?..
       }
     })
 

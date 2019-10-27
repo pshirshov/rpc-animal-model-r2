@@ -141,11 +141,11 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 }
 
 
-class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, ResponseContext, WValue]
+class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WValue]
 (
   codecs: GeneratedCalcCodecs[WValue],
-  override val transport: ClientTransport[F, C, ResponseContext, WValue],
-) extends GeneratedClientBase[F, C, ResponseContext, WValue] with ICalc.Interface[F, C] {
+  override val transport: ClientTransport[F, C, WValue],
+) extends GeneratedClientBase[F, C, WValue] with ICalc.Interface[F, C] {
 
   import BIO._
   import codecs._

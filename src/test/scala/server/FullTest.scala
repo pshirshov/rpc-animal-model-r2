@@ -7,17 +7,16 @@ import io.circe._
 import io.undertow.{Handlers, Undertow}
 import izumi.functional.bio.BIORunner
 import org.asynchttpclient.Dsl._
-import org.asynchttpclient.Response
 import org.scalatest.WordSpec
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook, WsClientContext}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
+import rpcmodel.rt.transport.errors.ServerTransportError
+import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncRequest
 import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
-import rpcmodel.rt.transport.http.servers.undertow.ws.model.{BuzzerRequestContext, WsConnection, WsServerInRequestContext}
+import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
 import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
@@ -70,10 +69,10 @@ class FullTest extends WordSpec {
     "support http calls" in withServer {
       (_, _) =>
         val client = makeClient()
-        assert(runtime.unsafeRunSync(client.div(C2SReqestClientCtx(), 6, 2)) == Exit.Success(3))
+        assert(runtime.unsafeRunSync(client.div(C2SOutgoingCtx(), 6, 2)) == Exit.Success(3))
 
         val negative = for {
-          res <- client.div(C2SReqestClientCtx(), 6, 0)
+          res <- client.div(C2SOutgoingCtx(), 6, 0)
             .catchAll((_: ZeroDivisionError) => IO("Got error"))
         } yield {
           res
@@ -88,13 +87,13 @@ class FullTest extends WordSpec {
       (server, _) =>
         val wsClient = makeWsClient()
         val test = for {
-          a1 <- wsClient.div(WsClientContext.empty, 6, 2)
+          a1 <- wsClient.div(C2SOutgoingCtx(), 6, 2)
           _ <- IO.effect(assert(a1 == 3))
           _ <- IO.effect(server.stop())
-          a2 <- wsClient.div(WsClientContext.empty, 8, 2).sandbox.fold(_ => -1, _ => -2)
+          a2 <- wsClient.div(C2SOutgoingCtx(), 8, 2).sandbox.fold(_ => -1, _ => -2)
           _ <- IO.effect(assert(a2 == -1))
           _ <- IO.effect(server.start())
-          a3 <- wsClient.div(WsClientContext.empty, 15, 3)
+          a3 <- wsClient.div(C2SOutgoingCtx(), 15, 3)
           _ <- IO.effect(assert(a3 == 5))
         } yield {
           (a1, a2, a3)
@@ -115,13 +114,11 @@ class FullTest extends WordSpec {
 
             val clients = b.map {
               b =>
-                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, C2SResponseClientCtx](
+                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, OutgoingPushServerCtx](
                   PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
                   b,
                   printer,
-                  new ContextProvider[IO, ClientDispatcherError, AsyncResponse, C2SResponseClientCtx] {
-                    override def decode(c: AsyncResponse): IO[ClientDispatcherError, C2SResponseClientCtx] = IO.succeed(C2SResponseClientCtx())
-                  }
+                  ClientRequestHook.passthrough,
                 )
 
                 new GeneratedCalcClientDispatcher(
@@ -133,7 +130,7 @@ class FullTest extends WordSpec {
 
             ZIO.traverse(clients) {
               c =>
-                c.div(BuzzerRequestContext.empty, 90, 3)
+                c.div(OutgoingPushServerCtx(), 90, 3)
             }
           }
         } yield {
@@ -146,16 +143,11 @@ class FullTest extends WordSpec {
     }
   }
 
-  protected def makeClient(): GeneratedCalcClientDispatcher[IO, C2SReqestClientCtx, C2SResponseClientCtx, Json] = {
-    val responseCtxProvider = new ContextProvider[IO, ClientDispatcherError, Response, C2SResponseClientCtx] {
-      override def decode(c: Response): IO[ClientDispatcherError, C2SResponseClientCtx] = IO.succeed(C2SResponseClientCtx())
-    }
-
-    val transport = new AHCHttpClient[IO, C2SReqestClientCtx, C2SResponseClientCtx](
+  protected def makeClient(): GeneratedCalcClientDispatcher[IO, C2SOutgoingCtx, Json] = {
+    val transport = new AHCHttpClient[IO, C2SOutgoingCtx](
       asyncHttpClient(config()),
       new URL("http://localhost:8080/http"),
       printer,
-      responseCtxProvider,
       ClientRequestHook.passthrough,
     )
 
@@ -165,26 +157,20 @@ class FullTest extends WordSpec {
     )
   }
 
-  protected def makeWsClient(): GeneratedCalcClientDispatcher[IO, WsClientContext, C2SResponseClientCtx, Json] = {
-    val serverResponseCtxProvider = new ContextProvider[IO, ClientDispatcherError, AsyncResponse, C2SResponseClientCtx] {
-      override def decode(c: AsyncResponse): IO[ClientDispatcherError, C2SResponseClientCtx] = IO.succeed(C2SResponseClientCtx())
-    }
-
-
-    val buzzerCtxProvider = new ContextProvider[IO, ServerTransportError, AsyncRequest, S2CReqestClientCtx] {
-      override def decode(c: AsyncRequest): IO[ServerTransportError, S2CReqestClientCtx] = {
-        IO.succeed(S2CReqestClientCtx())
+  protected def makeWsClient(): GeneratedCalcClientDispatcher[IO, C2SOutgoingCtx, Json] = {
+    val buzzerCtxProvider = new ContextProvider[IO, ServerTransportError, AsyncRequest, IncomingPushClientCtx] {
+      override def decode(c: AsyncRequest): IO[ServerTransportError, IncomingPushClientCtx] = {
+        IO.succeed(IncomingPushClientCtx())
       }
     }
 
 
-    val transport = new AHCWebsocketClient[IO, C2SResponseClientCtx, S2CReqestClientCtx](
+    val transport = new AHCWebsocketClient[IO, C2SOutgoingCtx, IncomingPushClientCtx](
       asyncHttpClient(config()),
       new URI("ws://localhost:8080/ws"),
       PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
       printer,
       ClientRequestHook.passthrough,
-      serverResponseCtxProvider,
       buzzerCtxProvider,
       dispatchers,
     )
@@ -196,15 +182,15 @@ class FullTest extends WordSpec {
   }
 
   protected def makeServer(): (Undertow, SessionManager[IO, CustomWsMeta]) = {
-    val dispatchers = this.dispatchers[C2SRequestServerCtx]
+    val dispatchers = this.dispatchers[IncomingServerCtx]
 
-    def makeHttpHandler: HttpServerHandler[IO, C2SRequestServerCtx, Nothing] = {
-      val serverctxdec = new ContextProvider[IO, ServerTransportError, HttpRequestContext, C2SRequestServerCtx] {
-        override def decode(c: HttpRequestContext): IO[ServerTransportError, C2SRequestServerCtx] = {
-          IO.succeed(C2SRequestServerCtx(c.exchange.getSourceAddress.toString, c.headers))
+    def makeHttpHandler: HttpServerHandler[IO, IncomingServerCtx, Nothing] = {
+      val serverctxdec = new ContextProvider[IO, ServerTransportError, HttpRequestContext, IncomingServerCtx] {
+        override def decode(c: HttpRequestContext): IO[ServerTransportError, IncomingServerCtx] = {
+          IO.succeed(IncomingServerCtx(c.exchange.getSourceAddress.toString, c.headers))
         }
       }
-      new HttpServerHandler[IO, C2SRequestServerCtx, Nothing](
+      new HttpServerHandler[IO, IncomingServerCtx, Nothing](
         dispatchers,
         serverctxdec,
         printer,
@@ -214,10 +200,10 @@ class FullTest extends WordSpec {
     }
 
 
-    def makeWsHandler: WebsocketServerHandler[IO, CustomWsMeta, C2SRequestServerCtx, Nothing] = {
-      val wsctxdec = new ContextProvider[IO, ServerTransportError, WsServerInRequestContext, C2SRequestServerCtx] {
-        override def decode(c: WsServerInRequestContext): IO[ServerTransportError, C2SRequestServerCtx] = {
-          IO.succeed(C2SRequestServerCtx(c.ctx.channel.getSourceAddress.toString, c.envelope.headers))
+    def makeWsHandler: WebsocketServerHandler[IO, CustomWsMeta, IncomingServerCtx, Nothing] = {
+      val wsctxdec = new ContextProvider[IO, ServerTransportError, WsServerInRequestContext, IncomingServerCtx] {
+        override def decode(c: WsServerInRequestContext): IO[ServerTransportError, IncomingServerCtx] = {
+          IO.succeed(IncomingServerCtx(c.ctx.channel.getSourceAddress.toString, c.envelope.headers))
         }
       }
 
@@ -230,7 +216,7 @@ class FullTest extends WordSpec {
         }
       }
 
-      new WebsocketServerHandler[IO, CustomWsMeta, C2SRequestServerCtx, Nothing](
+      new WebsocketServerHandler[IO, CustomWsMeta, IncomingServerCtx, Nothing](
         wsctxdec,
         dispatchers,
         printer,
@@ -239,8 +225,8 @@ class FullTest extends WordSpec {
       )
     }
 
-    val httpHandler: HttpServerHandler[IO, C2SRequestServerCtx, Nothing] = makeHttpHandler
-    val wsHandler: WebsocketServerHandler[IO, CustomWsMeta, C2SRequestServerCtx, Nothing] = makeWsHandler
+    val httpHandler: HttpServerHandler[IO, IncomingServerCtx, Nothing] = makeHttpHandler
+    val wsHandler: WebsocketServerHandler[IO, CustomWsMeta, IncomingServerCtx, Nothing] = makeWsHandler
 
     val s = Undertow
       .builder()
