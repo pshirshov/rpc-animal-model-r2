@@ -5,12 +5,11 @@ import java.util.UUID
 import io.circe.{Json, Printer}
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIORunner, BIOTransZio}
-import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
-import rpcmodel.rt.transport.errors.ClientDispatcherError
-import rpcmodel.rt.transport.http.clients.ahc.Repeat
+import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.shared.{InvokationId, PollingConfig}
 import zio._
@@ -20,12 +19,16 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, 
   pollingConfig: PollingConfig,
   client: WsSessionBuzzer[F, Meta],
   printer: Printer,
-  ctx: CtxDec[F, ClientDispatcherError, AsyncSuccess, ResponseContext],
+  ctx: ContextProvider[F, ClientDispatcherError, AsyncSuccess, ResponseContext],
 ) extends ClientTransport[F, RequestContext, ResponseContext, Json] {
 
   import io.circe.syntax._
 
   private val trans = implicitly[BIOTransZio[F]]
+
+  override def connect(): F[ClientDispatcherError, Unit] = F.fail(ClientDispatcherError.OperationUnsupported())
+
+  override def disconnect(): F[ClientDispatcherError, Unit] = client.disconnect().leftMap(t => ClientDispatcherError.UnknownException(t))
 
   override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
     for {
@@ -67,7 +70,7 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, 
       } yield {
         out
       })
-      result <- new Repeat[F].repeat(check, ClientDispatcherError.TimeoutException(id, methodId), pollingConfig.sleep, 0, pollingConfig.maxAttempts)
+      result <- check.repeatUntil(ClientDispatcherError.TimeoutException(id, methodId), pollingConfig.sleep, pollingConfig.maxAttempts)
     } yield {
       result
     }

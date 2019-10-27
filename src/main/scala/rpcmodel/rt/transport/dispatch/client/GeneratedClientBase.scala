@@ -12,6 +12,8 @@ abstract class GeneratedClientBase[F[+ _, + _] : BIOError, C, WCtxIn, WValue] {
 
   def hook: ClientHook[F, WCtxIn, WValue] = ClientHook.nothing
 
+  def transport: ClientTransport[F, C, WCtxIn, WValue]
+
   protected final def doDecode[V: IRTCodec[*, WValue]](r: ClientResponse[WCtxIn, WValue]): F[ClientDispatcherError, V] = {
     val codecRes = implicitly[IRTCodec[V, WValue]]
 

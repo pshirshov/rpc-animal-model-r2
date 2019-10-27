@@ -104,7 +104,7 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 (
   server: ICalc.Interface[F, C],
   codecs: GeneratedCalcCodecs[WValue],
-  override val hook: ServerHook[F, C, WValue] = ServerHook.nothing[F, C, WValue],
+  override val hook: ServerHook[F, C, WValue],
 ) extends GeneratedServerBaseImpl[F, C, WValue] {
 
   import BIO._
@@ -144,7 +144,7 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, ResponseContext, WValue]
 (
   codecs: GeneratedCalcCodecs[WValue],
-  transport: ClientTransport[F, C, ResponseContext, WValue],
+  override val transport: ClientTransport[F, C, ResponseContext, WValue],
   override val hook: ClientHook[F, ResponseContext, WValue] = ClientHook.nothing[F, ResponseContext, WValue],
 ) extends GeneratedClientBase[F, C, ResponseContext, WValue] with ICalc.Interface[F, C] {
 

@@ -10,7 +10,7 @@ import io.netty.util.concurrent.{Future, GenericFutureListener}
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIORunner, BIOTransZio}
 import org.asynchttpclient.AsyncHttpClient
-import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
@@ -19,43 +19,52 @@ import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncS
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig}
 import zio._
 
-import scala.concurrent.duration._
 import scala.util.Try
 
-class Repeat[F[+ _, + _] : BIOAsync] {
-  def repeat[E, V](action: F[E, Option[V]], onTimeout: => E, sleep: Duration, attempts: Int, maxAttempts: Int): F[E, V] = {
-    action.flatMap {
-      case Some(value) =>
-        F.pure(value)
-      case None =>
-        if (attempts <= maxAttempts) {
-          F.sleep(sleep) *> repeat(action, onTimeout, sleep, attempts + 1, maxAttempts)
-        } else {
-          F.fail(onTimeout)
-        }
-    }
-  }
-}
 
-
-
-class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, RequestContext, ResponseContext, ServerRequestContext]
+class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, RequestContext, ResponseContext, BuzzerRequestContext]
 (
   client: AsyncHttpClient,
   target: URI,
   pollingConfig: PollingConfig,
   printer: Printer,
-  ctx: CtxDec[IO, ClientDispatcherError, AsyncSuccess, ResponseContext],
-  override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, ServerRequestContext, Json]],
-  override protected val dec: CtxDec[F, ServerTransportError, AsyncRequest, ServerRequestContext],
+  clientContextProvider: ContextProvider[IO, ClientDispatcherError, AsyncSuccess, ResponseContext],
+  buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
+  buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
 ) extends ClientTransport[F, RequestContext, ResponseContext, Json]
-  with AbstractServerHandler[F, ServerRequestContext, AsyncRequest, Json]
+  with AbstractServerHandler[F, BuzzerRequestContext, AsyncRequest, Json]
   with AHCWSListener {
 
   import io.circe.syntax._
 
+  override protected val serverContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext] = buzzerContextProvider
+  override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = buzzerDispatchers
+
   private val pending = new ConcurrentHashMap[InvokationId, Option[AsyncSuccess]]()
   private val session = new AHCWsClientSession(client, target, this)
+
+  def connect(): F[ClientDispatcherError, Unit] = {
+    for {
+      _ <- F.sync(session.get())
+    } yield {
+    }
+  }
+
+
+  override def disconnect(): F[ClientDispatcherError, Unit] = {
+    F.async {
+      f =>
+        session.get().sendCloseFrame().addListener(new GenericFutureListener[Future[Void]] {
+          override def operationComplete(future: Future[Void]): Unit = {
+            if (future.isSuccess) {
+              f(Right(()))
+            } else {
+              f(Left(ClientDispatcherError.UnknownException(future.cause())))
+            }
+          }
+        })
+    }
+  }
 
   override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
     val trans = implicitly[BIOTransZio[F]]
@@ -86,7 +95,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
         _ <- status match {
           case Some(value) =>
             for {
-              responseContext <- ctx.decode(value)
+              responseContext <- clientContextProvider.decode(value)
               _ <- p.complete(IO.succeed(ClientResponse(responseContext, value.body)))
             } yield {
 
@@ -116,9 +125,8 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
         out
       })
 
-      out <- new Repeat[F].repeat(check, ClientDispatcherError.TimeoutException(id, methodId), pollingConfig.sleep, 0, pollingConfig.maxAttempts)
+      out <- check.repeatUntil(ClientDispatcherError.TimeoutException(id, methodId), pollingConfig.sleep, pollingConfig.maxAttempts)
     } yield {
-      System.err.println(s"HERE: $out")
       out
     }
   }
@@ -143,14 +151,12 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
       data <- F.fromEither(value.as[AsyncRequest]).leftMap(f => ServerTransportError.EnvelopeFormatError(value.toString(), f))
       out <- call(data, data.methodId, data.body)
       conn <- F.sync(session.get())
-      _ <- F.sync(println(s"sending buzzer response $out"))
       _ <- F.sync(conn.sendTextFrame(AsyncSuccess(Map.empty, out.value, data.id).asJson.printWith(printer)))
     } yield {
 
     }
 
-    BIORunner[F].unsafeRunSyncAsEither(work)
-    ()
+    BIORunner[F].unsafeRunAsyncAsEither(work)(_ => ())
   }
 
   private def handleResponse(value: Json): Unit = {

@@ -8,7 +8,7 @@ import izumi.functional.bio.BIO._
 import izumi.functional.bio.BIOAsync
 import org.asynchttpclient.{AsyncHttpClient, BoundRequestBuilder, Response}
 import rpcmodel.rt.transport.codecs.IRTCodec
-import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
@@ -20,9 +20,14 @@ class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext, ResponseContext]
   client: AsyncHttpClient,
   target: URL,
   printer: Printer,
-  ctx: CtxDec[F, ClientDispatcherError, Response, ResponseContext],
+  responseContextProvider: ContextProvider[F, ClientDispatcherError, Response, ResponseContext],
   hook: ClientRequestHook[RequestContext] = ClientRequestHook.Passthrough,
 ) extends ClientTransport[F, RequestContext, ResponseContext, Json] {
+
+  override def connect(): F[ClientDispatcherError, Unit] = F.unit
+
+  override def disconnect(): F[ClientDispatcherError, Unit] = F.unit
+
   override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
     import io.circe.parser._
 
@@ -44,7 +49,7 @@ class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext, ResponseContext]
           req.execute().toCompletableFuture.handle[Unit](handler)
           ()
       }
-      responseContext <- ctx.decode(resp)
+      responseContext <- responseContextProvider.decode(resp)
       body = resp.getResponseBody
       parsed <- F.fromEither(parse(body))
         .leftMap(e => ClientDispatcherError.ClientCodecFailure(List(IRTCodec.IRTCodecFailure.IRTParserException(e))))

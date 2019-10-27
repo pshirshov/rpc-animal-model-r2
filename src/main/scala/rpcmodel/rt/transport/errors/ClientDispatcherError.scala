@@ -13,6 +13,7 @@ object ClientDispatcherError {
   case class UnknownException(t: Throwable) extends ClientDispatcherError
 
   case class ServerError(s: ServerDispatcherError) extends ClientDispatcherError
+  case class OperationUnsupported() extends ClientDispatcherError
 
   case class ClientCodecFailure(failures: List[IRTCodecFailure]) extends ClientDispatcherError
 

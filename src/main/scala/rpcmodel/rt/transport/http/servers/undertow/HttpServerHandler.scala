@@ -8,7 +8,7 @@ import io.circe.{Json, Printer}
 import io.undertow.server.{HttpHandler, HttpServerExchange}
 import io.undertow.util.Headers
 import izumi.functional.bio.{BIOAsync, BIORunner}
-import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ServerWireResponse
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
@@ -27,7 +27,7 @@ import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
 (
   override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
-  override protected val dec: CtxDec[F, ServerTransportError, HttpRequestContext, C],
+  override protected val serverContextProvider: ContextProvider[F, ServerTransportError, HttpRequestContext, C],
   printer: Printer,
   extractor: MethodIdExtractor,
   handler: TransportErrorHandler[DomainErrors, HttpServerExchange]

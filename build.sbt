@@ -7,7 +7,7 @@ scalaVersion := "2.13.0"
 addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")
 
 
-libraryDependencies in ThisBuild += "io.7mind.izumi" %% "fundamentals-bio" % "0.9.5-M11"
+libraryDependencies in ThisBuild += "io.7mind.izumi" %% "fundamentals-bio" % "0.9.8"
 libraryDependencies in ThisBuild += "dev.zio" %% "zio" % "1.0.0-RC15"
 
 libraryDependencies in ThisBuild += "org.scala-lang.modules" %% "scala-java8-compat" % "0.9.0"

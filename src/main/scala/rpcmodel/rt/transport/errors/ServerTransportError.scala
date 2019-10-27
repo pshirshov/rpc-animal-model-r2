@@ -8,7 +8,7 @@ object ServerTransportError {
   case class DomainError[V](value: V) extends ServerTransportError
 
   sealed trait Predefined extends ServerTransportError
-  case class TransportException(e: Exception) extends Predefined
+  case class TransportException(e: Throwable) extends Predefined
   case class DispatcherError(e: ServerDispatcherError) extends Predefined
   case class MethodIdError(path: String) extends Predefined
   case class MissingService(id: MethodId) extends Predefined

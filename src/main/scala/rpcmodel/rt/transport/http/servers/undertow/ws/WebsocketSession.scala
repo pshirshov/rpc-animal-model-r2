@@ -10,7 +10,7 @@ import io.circe.parser.parse
 import io.circe.syntax._
 import io.undertow.websockets.core._
 import izumi.functional.bio.{BIOAsync, BIORunner}
-import rpcmodel.rt.transport.dispatch.CtxDec
+import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
@@ -24,7 +24,7 @@ import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsSer
 class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors]
 (
   ctx: WsConnection,
-  override protected val dec: CtxDec[F, ServerTransportError, WsServerInRequestContext, C],
+  override protected val serverContextProvider: ContextProvider[F, ServerTransportError, WsServerInRequestContext, C],
   override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
   printer: Printer,
   handler: TransportErrorHandler[DomainErrors, WsConnection],
@@ -48,6 +48,10 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
 
   override protected def bioAsync: BIOAsync[F] = implicitly
 
+  def disconnect(): F[Throwable, Unit] = {
+    F.syncThrowable(ctx.channel.sendClose())
+      .catchAll(_ => F.syncThrowable(ctx.channel.close()))
+  }
 
   override def onClose(webSocketChannel: WebSocketChannel, channel: StreamSourceFrameChannel): Unit = {
     sessions.drop(id)
@@ -59,7 +63,6 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
     val result = for {
       sbody <- F.pure(message.getData)
       decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
-      _ <- F.sync(println(s"got: $decoded"))
       out <- if (decoded.asObject.exists(_.toMap.contains("methodId"))) { // incoming request
         for {
           out <- dispatchRequest(channel, sbody, decoded)
@@ -90,7 +93,6 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
       _ <- F.sync {
         sessionMetaProvider.extract(this.ctx, meta.get(), envelope) match {
           case Some(value) =>
-            println(s"new meta of $id=$value")
             meta.set(value)
           case None =>
         }
@@ -114,7 +116,6 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
             f(Left(throwable))
           }
         }
-        println(s"Sending $value to client $id")
         WebSockets.sendText(value, this.ctx.channel, websocketCallback, ())
     }
   }
