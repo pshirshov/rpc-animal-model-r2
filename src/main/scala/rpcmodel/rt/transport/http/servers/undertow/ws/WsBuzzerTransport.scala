@@ -12,28 +12,27 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.http.clients.ahc.Repeat
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
-import rpcmodel.rt.transport.http.servers.shared.InvokationId
+import rpcmodel.rt.transport.http.servers.shared.{InvokationId, PollingConfig}
 import zio._
 
-import scala.concurrent.duration._
-
-class WsBuzzerTransport[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, Meta, RequestContext, ResponseContext]
+class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, RequestContext, ResponseContext]
 (
+  pollingConfig: PollingConfig,
   client: WsSessionBuzzer[F, Meta],
   printer: Printer,
   ctx: CtxDec[F, ClientDispatcherError, AsyncSuccess, ResponseContext],
 ) extends ClientTransport[F, RequestContext, ResponseContext, Json] {
+
   import io.circe.syntax._
 
-  val trans = implicitly[BIOTransZio[F]]
+  private val trans = implicitly[BIOTransZio[F]]
 
   override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
-    //import zio.duration._
     for {
       id <- F.pure(InvokationId(UUID.randomUUID().toString))
       envelope = AsyncRequest(methodId, Map.empty, body, id)
       _ <- client.send(envelope.asJson.printWith(printer)).leftMap(e => ClientDispatcherError.UnknownException(e))
-      p <-  trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]])
+      p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]])
       check = trans.ofZio(for {
         status <- trans.toZio(client.takePending(id))
         _ <- status match {
@@ -68,9 +67,8 @@ class WsBuzzerTransport[F[+_, +_]: BIOAsync : BIOTransZio : BIORunner, Meta, Req
       } yield {
         out
       })
-      result <- new Repeat[F].repeat(check, ClientDispatcherError.TimeoutException(id, methodId), 100.millis, 0, 20)
+      result <- new Repeat[F].repeat(check, ClientDispatcherError.TimeoutException(id, methodId), pollingConfig.sleep, 0, pollingConfig.maxAttempts)
     } yield {
-      System.err.println(s"WS: $result")
       result
     }
   }

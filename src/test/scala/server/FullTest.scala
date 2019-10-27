@@ -1,6 +1,7 @@
 package server
 
 import java.net.{URI, URL}
+import java.util.concurrent.TimeUnit
 
 import io.circe._
 import io.undertow.{Handlers, Undertow}
@@ -15,16 +16,18 @@ import rpcmodel.rt.transport.dispatch.client.ClientHook
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient}
-import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor}
+import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
-import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsServerInRequestContext, WsConnection}
+import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
 import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
 import zio.clock.Clock
 import zio.internal.{Platform, PlatformLive}
+
+import scala.concurrent.duration.FiniteDuration
 
 object TestMain extends FullTest {
   def main(args: Array[String]): Unit = {
@@ -106,9 +109,14 @@ class FullTest extends WordSpec {
             val clients = b.map {
               b =>
                 println(s"Buzzing ${b.id} ${b.meta}...")
-                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, CustomClientCtx, CustomClientCtx](b, printer, new CtxDec[IO, ClientDispatcherError, AsyncSuccess, CustomClientCtx] {
-                  override def decode(c: AsyncSuccess): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
-                })
+                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, CustomClientCtx, CustomClientCtx](
+                  PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
+                  b,
+                  printer,
+                  new CtxDec[IO, ClientDispatcherError, AsyncSuccess, CustomClientCtx] {
+                    override def decode(c: AsyncSuccess): IO[ClientDispatcherError, CustomClientCtx] = IO.succeed(CustomClientCtx())
+                  }
+                )
 
                 new GeneratedCalcClientDispatcher[IO, CustomClientCtx, CustomClientCtx, Json](
                   codecs,
@@ -128,7 +136,7 @@ class FullTest extends WordSpec {
 
         val result = runtime.unsafeRunSync(test)
         println(result)
-        assert(result.succeeded && result.toEither ==  Right(List(30)))
+        assert(result.succeeded && result.toEither == Right(List(30)))
         ()
     }
   }
@@ -174,9 +182,11 @@ class FullTest extends WordSpec {
       }
     }
 
+
     val fakeTransport = new AHCWebsocketClient[IO, CustomClientCtx, CustomClientCtx, CustomClientCtx](
       asyncHttpClient(config()),
       new URI("ws://localhost:8080/ws"),
+      PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
       printer,
       dec,
       dispatchers,

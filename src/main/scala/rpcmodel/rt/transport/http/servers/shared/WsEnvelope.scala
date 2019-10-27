@@ -8,7 +8,11 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, Meth
 import io.circe.derivation._
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncSuccess
 
+import scala.concurrent.duration.FiniteDuration
+
 case class InvokationId(id: String) extends AnyVal
+
+case class PollingConfig(sleep: FiniteDuration, maxAttempts: Int)
 
 object InvokationId {
   implicit def InvokationId_codec: Codec[InvokationId] = Codec.from(Decoder.decodeString.map(s => InvokationId(s)), Encoder.encodeString.contramap(_.id))
