@@ -23,16 +23,17 @@ import zio._
 import scala.util.Try
 
 
-class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, RequestContext, ResponseContext, BuzzerRequestContext]
+class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, ResponseContext, BuzzerRequestContext]
 (
   client: AsyncHttpClient,
   target: URI,
   pollingConfig: PollingConfig,
   printer: Printer,
-  clientContextProvider: ContextProvider[IO, ClientDispatcherError, AsyncResponse, ResponseContext],
+  hook: ClientRequestHook[WsClientContext, AsyncRequest],
+  clientContextProvider: ContextProvider[F, ClientDispatcherError, AsyncResponse, ResponseContext],
   buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
   buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
-) extends ClientTransport[F, RequestContext, ResponseContext, Json]
+) extends ClientTransport[F, WsClientContext, ResponseContext, Json]
   with AbstractServerHandler[F, BuzzerRequestContext, AsyncRequest, Json]
   with AHCWSListener {
 
@@ -67,12 +68,12 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
     }
   }
 
-  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
+  override def dispatch(c: WsClientContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
     val trans = implicitly[BIOTransZio[F]]
     for {
       s <- F.sync(session.get())
       id = InvokationId(UUID.randomUUID().toString)
-      envelope = AsyncRequest(methodId, Map.empty, body, id)
+      envelope = hook.onRequest(c, methodId, body, AsyncRequest(methodId, c.headers, body, id))
       _ <- F.sync(pending.put(id, None))
       _ <- F.async[ClientDispatcherError, Unit] {
         f =>
@@ -96,7 +97,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
         _ <- status match {
           case Some(value) =>
             for {
-              responseContext <- clientContextProvider.decode(value)
+              responseContext <- trans.toZio(clientContextProvider.decode(value))
               _ <- value match {
                 case s: AsyncSuccess =>
                   p.complete(IO.succeed(ClientResponse(responseContext, s.body)))

@@ -21,7 +21,7 @@ class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext, ResponseContext]
   target: URL,
   printer: Printer,
   responseContextProvider: ContextProvider[F, ClientDispatcherError, Response, ResponseContext],
-  hook: ClientRequestHook[RequestContext] = ClientRequestHook.Passthrough,
+  hook: ClientRequestHook[RequestContext, BoundRequestBuilder],
 ) extends ClientTransport[F, RequestContext, ResponseContext, Json] {
 
   override def connect(): F[ClientDispatcherError, Unit] = F.unit

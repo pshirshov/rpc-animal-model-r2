@@ -13,7 +13,7 @@ import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient}
+import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook, WsClientContext}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
@@ -88,13 +88,13 @@ class FullTest extends WordSpec {
       (server, _) =>
         val wsClient = makeWsClient()
         val test = for {
-          a1 <- wsClient.div(C2SReqestClientCtx(), 6, 2)
+          a1 <- wsClient.div(WsClientContext.empty, 6, 2)
           _ <- IO.effect(assert(a1 == 3))
           _ <- IO.effect(server.stop())
-          a2 <- wsClient.div(C2SReqestClientCtx(), 8, 2).sandbox.fold(_ => -1, _ => -2)
+          a2 <- wsClient.div(WsClientContext.empty, 8, 2).sandbox.fold(_ => -1, _ => -2)
           _ <- IO.effect(assert(a2 == -1))
           _ <- IO.effect(server.start())
-          a3 <- wsClient.div(C2SReqestClientCtx(), 15, 3)
+          a3 <- wsClient.div(WsClientContext.empty, 15, 3)
           _ <- IO.effect(assert(a3 == 5))
         } yield {
           (a1, a2, a3)
@@ -156,6 +156,7 @@ class FullTest extends WordSpec {
       new URL("http://localhost:8080/http"),
       printer,
       responseCtxProvider,
+      ClientRequestHook.passthrough,
     )
 
     new GeneratedCalcClientDispatcher(
@@ -164,7 +165,7 @@ class FullTest extends WordSpec {
     )
   }
 
-  protected def makeWsClient(): GeneratedCalcClientDispatcher[IO, C2SReqestClientCtx, C2SResponseClientCtx, Json] = {
+  protected def makeWsClient(): GeneratedCalcClientDispatcher[IO, WsClientContext, C2SResponseClientCtx, Json] = {
     val serverResponseCtxProvider = new ContextProvider[IO, ClientDispatcherError, AsyncResponse, C2SResponseClientCtx] {
       override def decode(c: AsyncResponse): IO[ClientDispatcherError, C2SResponseClientCtx] = IO.succeed(C2SResponseClientCtx())
     }
@@ -177,11 +178,12 @@ class FullTest extends WordSpec {
     }
 
 
-    val transport = new AHCWebsocketClient[IO, C2SReqestClientCtx, C2SResponseClientCtx, S2CReqestClientCtx](
+    val transport = new AHCWebsocketClient[IO, C2SResponseClientCtx, S2CReqestClientCtx](
       asyncHttpClient(config()),
       new URI("ws://localhost:8080/ws"),
       PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
       printer,
+      ClientRequestHook.passthrough,
       serverResponseCtxProvider,
       buzzerCtxProvider,
       dispatchers,
