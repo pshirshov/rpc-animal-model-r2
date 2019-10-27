@@ -3,9 +3,9 @@ package server
 import io.circe._
 import org.scalatest.WordSpec
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
-import rpcmodel.rt.transport.dispatch.client.{ClientHook, ClientTransport}
+import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
-import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, ServerHook}
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.errors.ClientDispatcherError.ServerError
 import rpcmodel.user.impl.CalcServerImpl
@@ -32,7 +32,6 @@ class TransportModelTest extends WordSpec {
       val serverDispatcher: GeneratedCalcServerDispatcher[IO, C2SRequestServerCtx, Json] = new GeneratedCalcServerDispatcher[IO, C2SRequestServerCtx, Json](
         server,
         codecs,
-        ServerHook.nothing,
       )
 
       val fakeTransport = new ClientTransport[IO, C2SResponseClientCtx, C2SResponseClientCtx, Json] {
@@ -53,7 +52,6 @@ class TransportModelTest extends WordSpec {
       val client = new GeneratedCalcClientDispatcher[IO, C2SResponseClientCtx, C2SResponseClientCtx, Json](
         codecs,
         fakeTransport,
-        ClientHook.nothing,
       )
 
       import zio._

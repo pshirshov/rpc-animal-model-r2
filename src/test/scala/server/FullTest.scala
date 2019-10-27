@@ -12,8 +12,6 @@ import org.scalatest.WordSpec
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.client.ClientHook
-import rpcmodel.rt.transport.dispatch.server.ServerHook
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
@@ -47,7 +45,6 @@ class FullTest extends WordSpec {
     val serverDispatcher = new GeneratedCalcServerDispatcher[IO, T, Json](
       server,
       codecs,
-      ServerHook.nothing,
     )
     Seq(serverDispatcher)
   }
@@ -164,7 +161,6 @@ class FullTest extends WordSpec {
     new GeneratedCalcClientDispatcher(
       codecs,
       transport,
-      ClientHook.nothing,
     )
   }
 
@@ -194,7 +190,6 @@ class FullTest extends WordSpec {
     new GeneratedCalcClientDispatcher(
       codecs,
       transport,
-      ClientHook.nothing,
     )
   }
 

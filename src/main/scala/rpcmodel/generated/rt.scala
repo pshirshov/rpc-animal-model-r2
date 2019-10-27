@@ -8,8 +8,8 @@ import rpcmodel.rt.transport.codecs.IRTCodec
 import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.dispatch._
-import rpcmodel.rt.transport.dispatch.client.{ClientHook, ClientTransport, GeneratedClientBase}
-import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBaseImpl, ServerHook}
+import rpcmodel.rt.transport.dispatch.client.{ClientTransport, GeneratedClientBase}
+import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.ServerDispatcherError
 
 trait GeneratedCalcCodecs[WValue] {
@@ -32,9 +32,11 @@ trait GeneratedCalcCodecsCirce extends GeneratedCalcCodecs[Json] {
 }
 
 class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
+
   import io.circe.literal._
 
   def e[T: Encoder](v: T): Json = implicitly[Encoder[T]].apply(v)
+
   def d[T: Decoder](v: Json): Either[List[IRTCodec.IRTCodecFailure], T] = implicitly[Decoder[T]].decodeJson(v).left.map(l => List(IRTCodecFailure.IRTCodecException(l)))
 
   override implicit def codec_SumInput: IRTCodec[SumInput, Json] = new IRTCodec[SumInput, Json] {
@@ -73,7 +75,7 @@ class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
       justValue match {
         case RPCResult.Good(value) => json"""{"s": ${implicitly[IRTCodec[G, Json]].encode(value)}}"""
 
-        case RPCResult.Bad(value) =>json"""{"f": ${implicitly[IRTCodec[B, Json]].encode(value)}}"""
+        case RPCResult.Bad(value) => json"""{"f": ${implicitly[IRTCodec[B, Json]].encode(value)}}"""
       }
     }
 
@@ -99,12 +101,10 @@ class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
 }
 
 
-
 class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 (
   server: ICalc.Interface[F, C],
   codecs: GeneratedCalcCodecs[WValue],
-  override val hook: ServerHook[F, C, WValue],
 ) extends GeneratedServerBaseImpl[F, C, WValue] {
 
   import BIO._
@@ -145,7 +145,6 @@ class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, ResponseContext, 
 (
   codecs: GeneratedCalcCodecs[WValue],
   override val transport: ClientTransport[F, C, ResponseContext, WValue],
-  override val hook: ClientHook[F, ResponseContext, WValue] = ClientHook.nothing[F, ResponseContext, WValue],
 ) extends GeneratedClientBase[F, C, ResponseContext, WValue] with ICalc.Interface[F, C] {
 
   import BIO._
@@ -192,30 +191,40 @@ class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, ResponseContext, 
 }
 
 object ICalcServerWrappedImpl {
+
   import io.circe.generic.semiauto._
   import io.circe.{Decoder, Encoder}
 
   case class SumInput(a: Int, b: Int)
+
   object SumInput {
     implicit def e: Encoder[SumInput] = deriveEncoder
+
     implicit def d: Decoder[SumInput] = deriveDecoder
   }
 
   case class SumOutput(a: Int)
+
   object SumOutput {
     implicit def e: Encoder[SumOutput] = deriveEncoder
+
     implicit def d: Decoder[SumOutput] = deriveDecoder
   }
 
   case class DivInput(a: Int, b: Int)
+
   object DivInput {
     implicit def e: Encoder[DivInput] = deriveEncoder
+
     implicit def d: Decoder[DivInput] = deriveDecoder
   }
 
   case class DivOutput(a: Int)
+
   object DivOutput {
     implicit def e: Encoder[DivOutput] = deriveEncoder
+
     implicit def d: Decoder[DivOutput] = deriveDecoder
   }
+
 }

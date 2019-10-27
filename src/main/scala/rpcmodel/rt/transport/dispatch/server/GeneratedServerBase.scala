@@ -20,8 +20,6 @@ abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue]
 
   import BIO._
 
-  def hook: ServerHook[F, C, WValue]
-
   override final def dispatch(methodId: MethodId, r: Req): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
     methods.get(methodId) match {
       case Some(value) =>
@@ -33,13 +31,13 @@ abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue]
 
   protected final def doDecode[V: IRTCodec[*, WValue]](r: Req): F[ServerDispatcherError, V] = {
     val codec = implicitly[IRTCodec[V, WValue]]
-    hook.onDecode(r, req => F.fromEither(codec.decode(req.value).left.map(f => ServerCodecFailure(f))))
+    F.fromEither(codec.decode(r.value).left.map(f => ServerCodecFailure(f)))
   }
 
   protected final def doEncode[ResBody: IRTCodec[*, WValue], ReqBody: IRTCodec[*, WValue]](r: Req, reqBody: ReqBody, resBody: ResBody): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
     val codec = implicitly[IRTCodec[ResBody, WValue]]
     for {
-      out <- hook.onEncode(r, reqBody, resBody, (_: Req, _: ReqBody, rb: ResBody) => F.pure(codec.encode(rb)))
+      out <- F.pure(codec.encode(resBody))
     } yield {
       ServerWireResponse(out)
     }

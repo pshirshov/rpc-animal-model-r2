@@ -10,14 +10,11 @@ abstract class GeneratedClientBase[F[+ _, + _] : BIOError, C, WCtxIn, WValue] {
 
   import izumi.functional.bio.BIO._
 
-  def hook: ClientHook[F, WCtxIn, WValue] = ClientHook.nothing
-
   def transport: ClientTransport[F, C, WCtxIn, WValue]
 
   protected final def doDecode[V: IRTCodec[*, WValue]](r: ClientResponse[WCtxIn, WValue]): F[ClientDispatcherError, V] = {
     val codecRes = implicitly[IRTCodec[V, WValue]]
 
-    hook.onDecode(r, r => F.fromEither(codecRes.decode(r.value).left.map(f => ClientCodecFailure(f))))
-
+    F.fromEither(codecRes.decode(r.value).left.map(f => ClientCodecFailure(f)))
   }
 }
