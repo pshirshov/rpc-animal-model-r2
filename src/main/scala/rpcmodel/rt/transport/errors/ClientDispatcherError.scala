@@ -13,7 +13,7 @@ object ClientDispatcherError {
   case class TimeoutException(id: InvokationId, methodId: MethodId) extends ClientDispatcherError
   case class UnknownException(t: Throwable) extends ClientDispatcherError
 
-  case class ServerError(/*s: ServerDispatcherError*/ err: Json) extends ClientDispatcherError
+  case class ServerError(/*s: ServerDispatcherError*/ err: Json) extends ClientDispatcherError // TODO: decode exceptions
   case class OperationUnsupported() extends ClientDispatcherError
 
   case class ClientCodecFailure(failures: List[IRTCodecFailure]) extends ClientDispatcherError

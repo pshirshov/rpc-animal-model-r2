@@ -10,7 +10,7 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.TransportErrorHandler
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
-import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WebsocketSession}
+import rpcmodel.rt.transport.http.servers.undertow.ws.{RuntimeErrorHandler, SessionManager, SessionMetaProvider, WebsocketSession}
 
 class WebsocketServerHandler[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors]
 (
@@ -18,7 +18,8 @@ class WebsocketServerHandler[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, Domain
   dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
   printer: Printer,
   onDomainError: TransportErrorHandler[DomainErrors, WsConnection],
-  sessionMetaProvider: SessionMetaProvider[Meta]
+  sessionMetaProvider: SessionMetaProvider[Meta],
+  errHandler: RuntimeErrorHandler[ServerTransportError.Predefined],
 ) extends WebSocketConnectionCallback {
   val sessionManager = new SessionManager[F, Meta]()
 
@@ -30,7 +31,8 @@ class WebsocketServerHandler[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, Domain
       printer,
       onDomainError,
       sessionManager,
-      sessionMetaProvider
+      sessionMetaProvider,
+      errHandler,
     )
 
     channel.getReceiveSetter.set(session)

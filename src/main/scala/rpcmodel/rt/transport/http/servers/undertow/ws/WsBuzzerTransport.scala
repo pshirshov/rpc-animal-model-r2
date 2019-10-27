@@ -15,9 +15,6 @@ import rpcmodel.rt.transport.http.servers.shared.{InvokationId, PollingConfig}
 import zio._
 
 
-
-
-
 class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, BuzzerRequestContext]
 (
   pollingConfig: PollingConfig,
@@ -28,18 +25,19 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, 
 
   import io.circe.syntax._
 
-  private val trans = implicitly[BIOTransZio[F]]
+  private val trans = implicitly[BIOTransZio[F]] // TODO: transzio
 
   override def connect(): F[ClientDispatcherError, Unit] = F.fail(ClientDispatcherError.OperationUnsupported())
 
   override def disconnect(): F[ClientDispatcherError, Unit] = client.disconnect().leftMap(t => ClientDispatcherError.UnknownException(t))
 
   override def dispatch(requestContext: BuzzerRequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[Json]] = {
-    for {
-      id <- F.pure(InvokationId(UUID.randomUUID().toString))
-      envelope = hook.onRequest(requestContext, methodId, body, AsyncRequest(methodId, Map.empty, body, id))
+    def work(id: InvokationId): F[ClientDispatcherError, ClientResponse[Json]] = for {
+      envelope <- F.pure(hook.onRequest(requestContext, methodId, body, AsyncRequest(methodId, Map.empty, body, id)))
+      _ <- client.setPending(id)
       _ <- client.send(envelope.asJson.printWith(printer)).leftMap(e => ClientDispatcherError.UnknownException(e))
       p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[Json]])
+
       check = trans.ofZio(for {
         status <- trans.toZio(client.takePending(id))
         _ <- status match {
@@ -79,6 +77,14 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, 
         out
       })
       result <- check.repeatUntil(ClientDispatcherError.TimeoutException(id, methodId), pollingConfig.sleep, pollingConfig.maxAttempts)
+    } yield {
+      result
+    }
+
+
+    for {
+      id <- F.pure(InvokationId(UUID.randomUUID().toString)) // TODO: random
+      result <- work(id).guarantee(F.sync(client.dropPending(id)))
     } yield {
       result
     }

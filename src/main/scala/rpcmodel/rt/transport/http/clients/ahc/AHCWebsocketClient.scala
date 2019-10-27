@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import io.circe.parser.parse
 import io.circe.{Json, Printer}
-import io.netty.util.concurrent.{Future, GenericFutureListener}
+import io.netty.util.concurrent.Future
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIORunner, BIOTransZio}
 import org.asynchttpclient.AsyncHttpClient
@@ -18,6 +18,7 @@ import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig}
+import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
 import zio._
 
 import scala.util.Try
@@ -32,6 +33,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsCli
   hook: ClientRequestHook[WsClientRequestContext, AsyncRequest],
   buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
   buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
+  errHandler: RuntimeErrorHandler[ServerTransportError],
 ) extends ClientTransport[F, WsClientRequestContext, Json]
   with AbstractServerHandler[F, BuzzerRequestContext, AsyncRequest, Json]
   with AHCWSListener {
@@ -55,35 +57,32 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsCli
   override def disconnect(): F[ClientDispatcherError, Unit] = {
     F.async {
       f =>
-        session.get().sendCloseFrame().addListener(new GenericFutureListener[Future[Void]] {
-          override def operationComplete(future: Future[Void]): Unit = {
-            if (future.isSuccess) {
-              f(Right(()))
-            } else {
-              f(Left(ClientDispatcherError.UnknownException(future.cause())))
-            }
+        session.get().sendCloseFrame().addListener((future: Future[Void]) => {
+          if (future.isSuccess) {
+            f(Right(()))
+          } else {
+            f(Left(ClientDispatcherError.UnknownException(future.cause())))
           }
         })
+        ()
     }
   }
 
   override def dispatch(c: WsClientRequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[Json]] = {
-    val trans = implicitly[BIOTransZio[F]]
+    val trans = implicitly[BIOTransZio[F]] // TODO: transzio
     for {
       s <- F.sync(session.get())
-      id = InvokationId(UUID.randomUUID().toString)
+      id = InvokationId(UUID.randomUUID().toString) // TODO: random
       envelope = hook.onRequest(c, methodId, body, AsyncRequest(methodId, Map.empty, body, id))
       _ <- F.sync(pending.put(id, None))
       _ <- F.async[ClientDispatcherError, Unit] {
         f =>
           s.sendTextFrame(envelope.asJson.printWith(printer))
-            .addListener(new GenericFutureListener[Future[Void]] {
-              override def operationComplete(future: Future[Void]): Unit = {
-                if (future.isSuccess) {
-                  f(Right(()))
-                } else {
-                  f(Left(ClientDispatcherError.UnknownException(future.cause())))
-                }
+            .addListener((future: Future[Void]) => {
+              if (future.isSuccess) {
+                f(Right(()))
+              } else {
+                f(Left(ClientDispatcherError.UnknownException(future.cause())))
               }
             })
           ()
@@ -161,7 +160,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsCli
 
     }
 
-    BIORunner[F].unsafeRunAsyncAsEither(work)(_ => ()) // TODO: handle exception?..
+    BIORunner[F].unsafeRunAsyncAsEither(work)(errHandler.handle(RuntimeErrorHandler.Context.WebsocketClientSession()))
   }
 
   private def handleResponse(value: Json): Unit = {

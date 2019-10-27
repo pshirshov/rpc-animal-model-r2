@@ -14,6 +14,7 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
+import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
 
 // Server replies to incoming request:
 //   - CtxDec may extract additional data from request and pass it as C
@@ -30,7 +31,8 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
   override protected val serverContextProvider: ContextProvider[F, ServerTransportError, HttpRequestContext, C],
   printer: Printer,
   extractor: MethodIdExtractor,
-  handler: TransportErrorHandler[DomainErrors, HttpServerExchange]
+  handler: TransportErrorHandler[DomainErrors, HttpServerExchange],
+  errHandler: RuntimeErrorHandler[Nothing],
 ) extends AbstractServerHandler[F, C, HttpRequestContext, Json] with HttpHandler {
 
   import izumi.functional.bio.BIO._
@@ -74,7 +76,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
 
     exchange.dispatch(new Runnable {
       override def run(): Unit = {
-        BIORunner[F].unsafeRunAsyncAsEither(out)(_ => ()) // TODO: handle exception?..
+        BIORunner[F].unsafeRunAsyncAsEither(out)(errHandler.handle(RuntimeErrorHandler.Context.HttpRequest(exchange)))
       }
     })
 

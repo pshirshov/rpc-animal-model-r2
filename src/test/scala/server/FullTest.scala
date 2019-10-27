@@ -17,7 +17,7 @@ import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncRequest
 import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
-import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
+import rpcmodel.rt.transport.http.servers.undertow.ws.{RuntimeErrorHandler, SessionManager, SessionMetaProvider, WsBuzzerTransport}
 import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
@@ -173,6 +173,7 @@ class FullTest extends WordSpec {
       ClientRequestHook.passthrough,
       buzzerCtxProvider,
       dispatchers,
+      RuntimeErrorHandler.ignore,
     )
 
     new GeneratedCalcClientDispatcher(
@@ -195,7 +196,8 @@ class FullTest extends WordSpec {
         serverctxdec,
         printer,
         MethodIdExtractor.TailImpl,
-        BasicTransportErrorHandler.withoutDomain
+        BasicTransportErrorHandler.withoutDomain,
+        RuntimeErrorHandler.ignore,
       )
     }
 
@@ -222,6 +224,7 @@ class FullTest extends WordSpec {
         printer,
         BasicTransportErrorHandler.withoutDomain,
         sessionMetaProvider,
+        RuntimeErrorHandler.ignore,
       )
     }
 
