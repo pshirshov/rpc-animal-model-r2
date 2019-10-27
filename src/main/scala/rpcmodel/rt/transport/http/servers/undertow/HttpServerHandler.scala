@@ -39,11 +39,6 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
   override protected def bioAsync: BIOAsync[F] = implicitly
 
   override def handleRequest(exchange: HttpServerExchange): Unit = {
-    if (exchange.isInIoThread) {
-      exchange.dispatch(this)
-      return
-    }
-
     val result: F[ServerTransportError, ServerWireResponse[Json]] = for {
       id <- F.fromEither(extractor.extract(exchange.getRequestPath))
       body <- F.async[ServerTransportError, Array[Byte]](f => {
@@ -72,13 +67,19 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
             exchange.setStatusCode(500)
         }
       }
+      _ <- F.sync(Thread.sleep(1000))
       _ <- F.sync(exchange.getResponseSender.send(json))
       _ <- F.sync(exchange.endExchange())
     } yield {
     }
 
-    // see out type, in case this throws - something very unexpected happened, we may just rethrow
-    BIORunner[F].unsafeRun(out)
+    exchange.dispatch(new Runnable {
+      override def run(): Unit = {
+        // TODO: log failures
+        BIORunner[F].unsafeRunAsyncAsEither(out)(_ => ())
+      }
+    })
+
   }
 }
 

@@ -115,7 +115,7 @@ class FullTest extends WordSpec {
 
             val clients = b.map {
               b =>
-                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, C2SResponseClientCtx, C2SResponseClientCtx](
+                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, C2SResponseClientCtx](
                   PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
                   b,
                   printer,
@@ -124,7 +124,7 @@ class FullTest extends WordSpec {
                   }
                 )
 
-                new GeneratedCalcClientDispatcher[IO, C2SResponseClientCtx, C2SResponseClientCtx, Json](
+                new GeneratedCalcClientDispatcher(
                   codecs,
                   buzzertransport,
                 )
@@ -133,7 +133,7 @@ class FullTest extends WordSpec {
 
             ZIO.traverse(clients) {
               c =>
-                c.div(C2SResponseClientCtx(), 90, 3)
+                c.div(BuzzerRequestContext.empty, 90, 3)
             }
           }
         } yield {

@@ -12,15 +12,20 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.shared.{InvokationId, PollingConfig}
+import rpcmodel.rt.transport.http.servers.undertow.ws.model.BuzzerRequestContext
 import zio._
 
-class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, RequestContext, ResponseContext]
+
+
+
+
+class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, ResponseContext]
 (
   pollingConfig: PollingConfig,
   client: WsSessionBuzzer[F, Meta],
   printer: Printer,
   ctx: ContextProvider[F, ClientDispatcherError, AsyncSuccess, ResponseContext],
-) extends ClientTransport[F, RequestContext, ResponseContext, Json] {
+) extends ClientTransport[F, BuzzerRequestContext, ResponseContext, Json] {
 
   import io.circe.syntax._
 
@@ -30,10 +35,10 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, 
 
   override def disconnect(): F[ClientDispatcherError, Unit] = client.disconnect().leftMap(t => ClientDispatcherError.UnknownException(t))
 
-  override def dispatch(c: RequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
+  override def dispatch(requestContext: BuzzerRequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[ResponseContext, Json]] = {
     for {
       id <- F.pure(InvokationId(UUID.randomUUID().toString))
-      envelope = AsyncRequest(methodId, Map.empty, body, id)
+      envelope = AsyncRequest(methodId, requestContext.headers, body, id)
       _ <- client.send(envelope.asJson.printWith(printer)).leftMap(e => ClientDispatcherError.UnknownException(e))
       p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[ResponseContext, Json]])
       check = trans.ofZio(for {

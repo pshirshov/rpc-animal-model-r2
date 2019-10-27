@@ -6,15 +6,15 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, Serv
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 
-trait AbstractServerHandler[F[+ _, + _], C, WCtxIn, WValue] {
+trait AbstractServerHandler[F[+ _, + _], TransportContext, ServerTransportContext, WireBody] {
 
   import izumi.functional.bio.BIO._
 
   protected implicit def bioAsync: BIOAsync[F]
 
-  protected def dispatchers: Seq[GeneratedServerBaseImpl[F, C, WValue]]
+  protected def dispatchers: Seq[GeneratedServerBaseImpl[F, TransportContext, WireBody]]
 
-  protected def serverContextProvider: ContextProvider[F, ServerTransportError, WCtxIn, C]
+  protected def serverContextProvider: ContextProvider[F, ServerTransportError, ServerTransportContext, TransportContext]
 
   private lazy val methods = dispatchers
     .groupBy(_.id)
@@ -27,7 +27,7 @@ trait AbstractServerHandler[F[+ _, + _], C, WCtxIn, WValue] {
     }
     .toMap
 
-  protected def call(headers: WCtxIn, id: MethodId, decoded: WValue): F[ServerTransportError, ServerWireResponse[WValue]] = {
+  protected def call(headers: ServerTransportContext, id: MethodId, decoded: WireBody): F[ServerTransportError, ServerWireResponse[WireBody]] = {
     for {
       svcm <- F.fromOption(ServerTransportError.MissingService(id))(methods.get(id.service))
       ctx <- serverContextProvider.decode(headers)

@@ -18,9 +18,6 @@ import rpcmodel.rt.transport.http.servers.shared._
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
 
 
-
-
-
 class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors]
 (
   ctx: WsConnection,
@@ -34,11 +31,11 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
 
   import izumi.functional.bio.BIO._
 
+  override protected def bioAsync: BIOAsync[F] = implicitly
 
   val id: WsSessionId = WsSessionId(UUID.randomUUID())
   val meta = new AtomicReference(sessionMetaProvider.extractInitial(ctx))
   val pending = new ConcurrentHashMap[InvokationId, PendingResponse]() // TODO: cleanups
-
 
   def init(): Unit = {
     sessions.register(this)
@@ -46,7 +43,6 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
 
   init()
 
-  override protected def bioAsync: BIOAsync[F] = implicitly
 
   def disconnect(): F[Throwable, Unit] = {
     F.syncThrowable(ctx.channel.sendClose())
@@ -70,7 +66,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
             .redeemPure(handler.onError(this.ctx), v => TransportResponse.Success(v))
           json = out.value.printWith(printer)
           _ <- doSend(json)
-            .catchAll(t => F.pure(())) // TODO: handle exception?..
+            .catchAll(_ => F.pure(())) // TODO: handle exception?..
         } yield {
         }
       } else {
@@ -84,7 +80,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
       out
     }
 
-    BIORunner[F].unsafeRun(result)
+    BIORunner[F].unsafeRunAsyncAsEither(result)(_ => ()) // TODO: handle exception?..
   }
 
   private def dispatchRequest(channel: WebSocketChannel, sbody: String, decoded: Json): F[ServerTransportError, Json] = {
