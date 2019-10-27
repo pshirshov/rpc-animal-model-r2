@@ -13,7 +13,8 @@ import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.AsyncSuccess
 import rpcmodel.rt.transport.http.servers.shared._
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
 
@@ -71,7 +72,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
         }
       } else {
         for {
-          envelope <- F.fromEither(decoded.as[AsyncSuccess]).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
+          envelope <- F.fromEither(decoded.as[AsyncResponse]).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
           _ <- F.sync(pending.put(envelope.id, PendingResponse(envelope, LocalDateTime.now()))) // TODO: clock
         } yield {
         }

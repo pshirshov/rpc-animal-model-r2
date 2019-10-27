@@ -14,10 +14,10 @@ import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, G
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
-import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
+import rpcmodel.rt.transport.http.servers.undertow.ws.model.{BuzzerRequestContext, WsConnection, WsServerInRequestContext}
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
 import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
@@ -119,8 +119,8 @@ class FullTest extends WordSpec {
                   PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
                   b,
                   printer,
-                  new ContextProvider[IO, ClientDispatcherError, AsyncSuccess, C2SResponseClientCtx] {
-                    override def decode(c: AsyncSuccess): IO[ClientDispatcherError, C2SResponseClientCtx] = IO.succeed(C2SResponseClientCtx())
+                  new ContextProvider[IO, ClientDispatcherError, AsyncResponse, C2SResponseClientCtx] {
+                    override def decode(c: AsyncResponse): IO[ClientDispatcherError, C2SResponseClientCtx] = IO.succeed(C2SResponseClientCtx())
                   }
                 )
 
@@ -165,8 +165,8 @@ class FullTest extends WordSpec {
   }
 
   protected def makeWsClient(): GeneratedCalcClientDispatcher[IO, C2SReqestClientCtx, C2SResponseClientCtx, Json] = {
-    val serverResponseCtxProvider = new ContextProvider[IO, ClientDispatcherError, AsyncSuccess, C2SResponseClientCtx] {
-      override def decode(c: AsyncSuccess): IO[ClientDispatcherError, C2SResponseClientCtx] = IO.succeed(C2SResponseClientCtx())
+    val serverResponseCtxProvider = new ContextProvider[IO, ClientDispatcherError, AsyncResponse, C2SResponseClientCtx] {
+      override def decode(c: AsyncResponse): IO[ClientDispatcherError, C2SResponseClientCtx] = IO.succeed(C2SResponseClientCtx())
     }
 
 

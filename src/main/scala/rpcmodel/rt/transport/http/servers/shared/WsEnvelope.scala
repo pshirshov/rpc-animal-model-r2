@@ -3,10 +3,10 @@ package rpcmodel.rt.transport.http.servers.shared
 import java.time.LocalDateTime
 import java.util.UUID
 
-import io.circe.{Codec, Decoder, Encoder, Json}
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, MethodName, ServiceName}
 import io.circe.derivation._
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncSuccess
+import io.circe._
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, MethodName, ServiceName}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -20,10 +20,11 @@ object InvokationId {
 
 case class WsSessionId(id: UUID) extends AnyVal
 
-case class PendingResponse(envelope: AsyncSuccess, timestamp: LocalDateTime)
+case class PendingResponse(envelope: AsyncResponse, timestamp: LocalDateTime)
 
 
 object Envelopes {
+
   case class AsyncRequest(methodId: MethodId, headers: Map[String, Seq[String]], body: Json, id: InvokationId)
 
   object AsyncRequest {
@@ -36,16 +37,43 @@ object Envelopes {
     implicit def EnvelopeIn_codec: Codec[AsyncRequest] = deriveCodec
   }
 
-  case class AsyncSuccess(headers: Map[String, Seq[String]], body: Json, id: InvokationId)
-
-  object AsyncSuccess {
-    implicit def EnvelopeOut_codec: Codec[AsyncSuccess] = deriveCodec
+  sealed trait AsyncResponse {
+    def headers: Map[String, Seq[String]]
+    def id: InvokationId
   }
 
-  case class AsyncFailure(headers: Map[String, Seq[String]], error: Json, id: InvokationId)
+  object AsyncResponse {
 
-  object AsyncFailure {
-    implicit def EnvelopeOutErr_codec: Codec[AsyncFailure] = deriveCodec
+    import io.circe.syntax._
+
+    implicit def EnvelopePoly_codec: Codec[AsyncResponse] = Codec.from(Decoder.decodeJson.flatMap {
+      json =>
+        val out = if (json.asObject.exists(_.contains("body"))) {
+          implicitly[Decoder[AsyncSuccess]]
+        } else {
+          implicitly[Decoder[AsyncFailure]]
+        }
+        out.asInstanceOf[Decoder[AsyncResponse]]
+    }, Encoder.encodeJson.contramap({ case s: AsyncSuccess =>
+      s.asJson
+    case f: AsyncFailure =>
+      f.asJson
+    }))
+
+
+    case class AsyncSuccess(headers: Map[String, Seq[String]], body: Json, id: InvokationId) extends AsyncResponse
+
+    object AsyncSuccess {
+      implicit def EnvelopeOut_codec: Codec[AsyncSuccess] = deriveCodec
+    }
+
+    case class AsyncFailure(headers: Map[String, Seq[String]], error: Json, id: InvokationId) extends AsyncResponse
+
+    object AsyncFailure {
+      implicit def EnvelopeOutErr_codec: Codec[AsyncFailure] = deriveCodec
+    }
+
   }
+
 }
 

@@ -9,8 +9,8 @@ import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
-import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
+import rpcmodel.rt.transport.errors.ClientDispatcherError
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{InvokationId, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.BuzzerRequestContext
 import zio._
@@ -24,7 +24,7 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, 
   pollingConfig: PollingConfig,
   client: WsSessionBuzzer[F, Meta],
   printer: Printer,
-  ctx: ContextProvider[F, ClientDispatcherError, AsyncSuccess, ResponseContext],
+  ctx: ContextProvider[F, ClientDispatcherError, AsyncResponse, ResponseContext],
 ) extends ClientTransport[F, BuzzerRequestContext, ResponseContext, Json] {
 
   import io.circe.syntax._
@@ -47,7 +47,12 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, 
           case Some(value) =>
             for {
               responseContext <- trans.toZio(ctx.decode(value.envelope))
-              _ <- p.complete(IO.succeed(ClientResponse(responseContext, value.envelope.body)))
+              _ <- value.envelope match {
+                case s: AsyncResponse.AsyncSuccess =>
+                  p.complete(IO.succeed(ClientResponse(responseContext, s.body)))
+                case f: AsyncResponse.AsyncFailure =>
+                  p.complete(IO.fail(ClientDispatcherError.ServerError(f.error)))
+              }
             } yield {
 
             }

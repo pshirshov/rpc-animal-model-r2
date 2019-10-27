@@ -15,7 +15,8 @@ import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncSuccess}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig}
 import zio._
 
@@ -28,7 +29,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
   target: URI,
   pollingConfig: PollingConfig,
   printer: Printer,
-  clientContextProvider: ContextProvider[IO, ClientDispatcherError, AsyncSuccess, ResponseContext],
+  clientContextProvider: ContextProvider[IO, ClientDispatcherError, AsyncResponse, ResponseContext],
   buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
   buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
 ) extends ClientTransport[F, RequestContext, ResponseContext, Json]
@@ -40,7 +41,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
   override protected val serverContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext] = buzzerContextProvider
   override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = buzzerDispatchers
 
-  private val pending = new ConcurrentHashMap[InvokationId, Option[AsyncSuccess]]()
+  private val pending = new ConcurrentHashMap[InvokationId, Option[AsyncResponse]]()
   private val session = new AHCWsClientSession(client, target, this)
 
   def connect(): F[ClientDispatcherError, Unit] = {
@@ -96,7 +97,12 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
           case Some(value) =>
             for {
               responseContext <- clientContextProvider.decode(value)
-              _ <- p.complete(IO.succeed(ClientResponse(responseContext, value.body)))
+              _ <- value match {
+                case s: AsyncSuccess =>
+                  p.complete(IO.succeed(ClientResponse(responseContext, s.body)))
+                case f: AsyncFailure =>
+                  p.complete(IO.fail(ClientDispatcherError.ServerError(f.error)))
+              }
             } yield {
 
             }
@@ -161,12 +167,11 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Reque
 
   private def handleResponse(value: Json): Unit = {
     for {
-      data <- value.as[AsyncSuccess]
+      data <- value.as[AsyncResponse]
       id <- Try(UUID.fromString(data.id.id)).toEither
     } yield {
       pending.put(InvokationId(id.toString), Some(data))
     }
-
     ()
   }
 
