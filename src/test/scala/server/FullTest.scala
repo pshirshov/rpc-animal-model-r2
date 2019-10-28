@@ -6,6 +6,8 @@ import java.util.concurrent.TimeUnit
 import io.circe._
 import io.undertow.{Handlers, Undertow}
 import izumi.functional.bio.BIORunner
+import izumi.fundamentals.platform.entropy.{Entropy, Entropy2}
+import izumi.fundamentals.platform.time.Clock2
 import org.asynchttpclient.Dsl._
 import org.scalatest.WordSpec
 import rpcmodel.generated.ICalc.ZeroDivisionError
@@ -38,6 +40,8 @@ object TestMain extends FullTest {
 class FullTest extends WordSpec {
   protected val codecs: GeneratedCalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
   protected val printer: Printer = Printer.spaces2
+  protected val clock2: Clock2[IO] = ???
+  protected val entropy2: Entropy2[IO] = ???
 
   protected def dispatchers[T]: Seq[GeneratedCalcServerDispatcher[IO, T, Json]] = {
     val server = new CalcServerImpl[IO, T]
@@ -119,6 +123,7 @@ class FullTest extends WordSpec {
                   b,
                   printer,
                   ClientRequestHook.passthrough,
+                  entropy2,
                 )
 
                 new GeneratedCalcClientDispatcher(
@@ -174,6 +179,7 @@ class FullTest extends WordSpec {
       buzzerCtxProvider,
       dispatchers,
       RuntimeErrorHandler.ignore,
+      entropy2,
     )
 
     new GeneratedCalcClientDispatcher(
@@ -225,6 +231,8 @@ class FullTest extends WordSpec {
         BasicTransportErrorHandler.withoutDomain,
         sessionMetaProvider,
         RuntimeErrorHandler.ignore,
+        clock2,
+        Entropy.Standard,
       )
     }
 

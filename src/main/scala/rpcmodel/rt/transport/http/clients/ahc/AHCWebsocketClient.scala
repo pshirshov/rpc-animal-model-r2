@@ -9,6 +9,7 @@ import io.circe.{Json, Printer}
 import io.netty.util.concurrent.Future
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIORunner, BIOTransZio}
+import izumi.fundamentals.platform.entropy.{Entropy, Entropy2}
 import org.asynchttpclient.AsyncHttpClient
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
@@ -34,6 +35,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsCli
   buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
   buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
   errHandler: RuntimeErrorHandler[ServerTransportError],
+  random: Entropy2[F]
 ) extends ClientTransport[F, WsClientRequestContext, Json]
   with AbstractServerHandler[F, BuzzerRequestContext, AsyncRequest, Json]
   with AHCWSListener {
@@ -72,9 +74,10 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsCli
     val trans = implicitly[BIOTransZio[F]] // TODO: transzio
     for {
       s <- F.sync(session.get())
-      id = InvokationId(UUID.randomUUID().toString) // TODO: random
-      envelope = hook.onRequest(c, methodId, body, AsyncRequest(methodId, Map.empty, body, id))
-      _ <- F.sync(pending.put(id, None))
+      id <- random.nextTimeUUID()
+      iid = InvokationId(id.toString)
+      envelope = hook.onRequest(c, methodId, body, AsyncRequest(methodId, Map.empty, body, iid))
+      _ <- F.sync(pending.put(iid, None))
       _ <- F.async[ClientDispatcherError, Unit] {
         f =>
           s.sendTextFrame(envelope.asJson.printWith(printer))
@@ -91,7 +94,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsCli
       p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[Json]])
 
       check = trans.ofZio(for {
-        status <- IO.effectTotal(pending.get(id))
+        status <- IO.effectTotal(pending.get(iid))
         _ <- status match {
           case Some(value) =>
             for {
@@ -129,7 +132,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsCli
         out
       })
 
-      out <- check.repeatUntil(ClientDispatcherError.TimeoutException(id, methodId), pollingConfig.sleep, pollingConfig.maxAttempts)
+      out <- check.repeatUntil(ClientDispatcherError.TimeoutException(iid, methodId), pollingConfig.sleep, pollingConfig.maxAttempts)
     } yield {
       out
     }

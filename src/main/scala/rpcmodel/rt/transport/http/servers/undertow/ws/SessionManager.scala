@@ -25,7 +25,7 @@ class SessionManager[F[+ _, + _] : BIOAsync : BIORunner, Meta] {
       .asScala
       .values
       .filter(s => pred(s.meta.get()))
-      .map(s => new WsSessionBuzzer(s))
+      .map(s => s.makeBuzzer())
       .toSeq
   }
 }

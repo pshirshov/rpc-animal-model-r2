@@ -11,6 +11,9 @@ import io.circe.syntax._
 import io.undertow.server.HttpServerExchange
 import io.undertow.websockets.core._
 import izumi.functional.bio.{BIOAsync, BIOExit, BIORunner}
+import izumi.fundamentals.platform.entropy.{Entropy, Entropy2}
+import izumi.fundamentals.platform.functional.Identity
+import izumi.fundamentals.platform.time.Clock2
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
@@ -66,13 +69,17 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
   sessions: SessionManager[F, Meta],
   sessionMetaProvider: SessionMetaProvider[Meta],
   errHandler: RuntimeErrorHandler[ServerTransportError.Predefined],
+  clock: Clock2[F],
+  entropy: Entropy[Identity]
 ) extends AbstractReceiveListener with AbstractServerHandler[F, C, WsServerInRequestContext, Json] {
+
+  def makeBuzzer(): WsSessionBuzzer[F, Meta] = new WsSessionBuzzer(this)
 
   import izumi.functional.bio.BIO._
 
   override protected def bioAsync: BIOAsync[F] = implicitly
 
-  val id: WsSessionId = WsSessionId(UUID.randomUUID()) // TODO: random
+  val id: WsSessionId = WsSessionId(entropy.nextTimeUUID())
   val pending = new ConcurrentHashMap[InvokationId, Option[PendingResponse]]()
 
   val meta = new AtomicReference(sessionMetaProvider.extractInitial(ctx))
@@ -137,7 +144,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
   }
 
   private def now(): F[Nothing, LocalDateTime] = {
-    F.sync(LocalDateTime.now()) // TODO: clock
+    clock.now().map(_.toLocalDateTime)
   }
 
   private def dispatchRequest(channel: WebSocketChannel, sbody: String, decoded: Json): F[ServerTransportError, Json] = {

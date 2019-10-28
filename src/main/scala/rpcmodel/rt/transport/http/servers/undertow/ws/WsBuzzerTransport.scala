@@ -5,6 +5,7 @@ import java.util.UUID
 import io.circe.{Json, Printer}
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIORunner, BIOTransZio}
+import izumi.fundamentals.platform.entropy.Entropy2
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
@@ -21,6 +22,7 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, 
   client: WsSessionBuzzer[F, Meta],
   printer: Printer,
   hook: ClientRequestHook[BuzzerRequestContext, AsyncRequest],
+  random: Entropy2[F],
 ) extends ClientTransport[F, BuzzerRequestContext, Json] {
 
   import io.circe.syntax._
@@ -83,8 +85,9 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, Meta, 
 
 
     for {
-      id <- F.pure(InvokationId(UUID.randomUUID().toString)) // TODO: random
-      result <- work(id).guarantee(F.sync(client.dropPending(id)))
+      id <- random.nextTimeUUID()
+      iid = InvokationId(id.toString)
+      result <- work(iid).guarantee(F.sync(client.dropPending(iid)))
     } yield {
       result
     }

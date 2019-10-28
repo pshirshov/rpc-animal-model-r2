@@ -5,6 +5,9 @@ import io.undertow.websockets.WebSocketConnectionCallback
 import io.undertow.websockets.core.WebSocketChannel
 import io.undertow.websockets.spi.WebSocketHttpExchange
 import izumi.functional.bio.{BIOAsync, BIORunner}
+import izumi.fundamentals.platform.entropy.Entropy
+import izumi.fundamentals.platform.functional.Identity
+import izumi.fundamentals.platform.time.Clock2
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
@@ -20,6 +23,8 @@ class WebsocketServerHandler[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, Domain
   onDomainError: TransportErrorHandler[DomainErrors, WsConnection],
   sessionMetaProvider: SessionMetaProvider[Meta],
   errHandler: RuntimeErrorHandler[ServerTransportError.Predefined],
+  clock: Clock2[F],
+  entropy: Entropy[Identity]
 ) extends WebSocketConnectionCallback {
   val sessionManager = new SessionManager[F, Meta]()
 
@@ -33,6 +38,8 @@ class WebsocketServerHandler[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, Domain
       sessionManager,
       sessionMetaProvider,
       errHandler,
+      clock,
+      entropy,
     )
 
     channel.getReceiveSetter.set(session)
