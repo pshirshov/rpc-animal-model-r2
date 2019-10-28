@@ -4,10 +4,9 @@ import io.circe.{Json, Printer}
 import io.undertow.websockets.WebSocketConnectionCallback
 import io.undertow.websockets.core.WebSocketChannel
 import io.undertow.websockets.spi.WebSocketHttpExchange
-import izumi.functional.bio.{BIOAsync, BIORunner}
-import izumi.fundamentals.platform.entropy.Entropy
+import izumi.functional.bio.{BIOAsync, BIORunner, Clock2}
+import izumi.functional.mono.Entropy
 import izumi.fundamentals.platform.functional.Identity
-import izumi.fundamentals.platform.time.Clock2
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError

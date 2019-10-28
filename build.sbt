@@ -6,8 +6,9 @@ scalaVersion := "2.13.0"
 
 addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")
 
+resolvers += Resolver.sonatypeRepo("snapshots")
 
-val izumi = "0.9.9"
+val izumi = "0.9.10-SNAPSHOT"
 libraryDependencies in ThisBuild += "io.7mind.izumi" %% "fundamentals-bio" % izumi
 libraryDependencies in ThisBuild += "io.7mind.izumi" %% "fundamentals-platform" % izumi
 
@@ -18,7 +19,7 @@ libraryDependencies in ThisBuild += "org.scala-lang.modules" %% "scala-java8-com
 libraryDependencies in ThisBuild += "org.asynchttpclient" % "async-http-client" % "2.10.4"
 
 libraryDependencies in ThisBuild ++= Seq(
-  "io.undertow" % "undertow-core"  % "2.0.1.Final",
+  "io.undertow" % "undertow-core" % "2.0.1.Final",
 )
 
 val circeVersion = "0.12.1"

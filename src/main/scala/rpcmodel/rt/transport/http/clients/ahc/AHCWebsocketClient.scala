@@ -7,8 +7,7 @@ import io.circe.parser.parse
 import io.circe.{Json, Printer}
 import io.netty.util.concurrent.Future
 import izumi.functional.bio.BIO._
-import izumi.functional.bio.{BIOAsync, BIOPrimitives, BIORunner}
-import izumi.fundamentals.platform.entropy.Entropy2
+import izumi.functional.bio.{BIOAsync, BIOPrimitives, BIORunner, Entropy2}
 import org.asynchttpclient.AsyncHttpClient
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
@@ -166,7 +165,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
       data <- value.as[AsyncResponse].left.map(f => ServerTransportError.EnvelopeFormatError(value.toString(), f))
       maybeId <- data.maybeId.toRight(ServerTransportError.UnknownRequest(value.toString()))
     } yield {
-      pending.put(InvokationId(maybeId.id.substring(0, 127)), Some(data))
+      pending.put(InvokationId(maybeId.id.take(127)), Some(data))
     }
     ()
   }

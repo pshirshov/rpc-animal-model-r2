@@ -12,9 +12,10 @@ import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
+import rpcmodel.rt.transport.http.servers.shared.TransportResponse
 
 
-class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext]
+class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
 (
   client: AsyncHttpClient,
   target: URL,
@@ -50,8 +51,17 @@ class AHCHttpClient[F[+_, +_]: BIOAsync, RequestContext]
       body = resp.getResponseBody
       parsed <- F.fromEither(parse(body))
         .leftMap(e => ClientDispatcherError.ClientCodecFailure(List(IRTCodec.IRTCodecFailure.IRTParserException(e))))
+      out <- F.fromEither(parsed.as[TransportResponse])
+        .leftMap(e => ClientDispatcherError.ClientCodecFailure(List(IRTCodec.IRTCodecFailure.IRTParserException(e))))
+      r <- out match {
+        case TransportResponse.Success(data) =>
+          F.pure(ClientResponse(data))
+        case TransportResponse.Failure(error) =>
+          F.fail(ClientDispatcherError.ServerError(error))
+      }
     } yield {
-      ClientResponse( parsed)
+      r
+
     }
   }
 

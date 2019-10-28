@@ -2,8 +2,7 @@ package rpcmodel.rt.transport.http.servers.undertow.ws
 
 import io.circe.{Json, Printer}
 import izumi.functional.bio.BIO._
-import izumi.functional.bio.{BIOAsync, BIOPrimitives, BIORunner}
-import izumi.fundamentals.platform.entropy.Entropy2
+import izumi.functional.bio.{BIOAsync, BIOPrimitives, BIORunner, Entropy2}
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
