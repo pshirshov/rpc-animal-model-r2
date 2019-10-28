@@ -180,6 +180,7 @@ class FullTest extends WordSpec {
       dispatchers[IncomingPushClientCtx],
       RuntimeErrorHandler.ignore,
       entropy2,
+      BasicTransportErrorHandler.withoutDomain,
     )
 
     new GeneratedCalcClientDispatcher(

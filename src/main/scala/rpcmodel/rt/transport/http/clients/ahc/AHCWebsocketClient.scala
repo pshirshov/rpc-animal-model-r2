@@ -17,11 +17,11 @@ import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServ
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
-import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig}
+import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig, TransportErrorHandler}
 import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
 
 
-class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsClientRequestContext, BuzzerRequestContext]
+class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsClientRequestContext, BuzzerRequestContext, +DomainErrors >: Nothing]
 (
   client: AsyncHttpClient,
   target: URI,
@@ -31,7 +31,8 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
   buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
   buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
   errHandler: RuntimeErrorHandler[ServerTransportError],
-  random: Entropy2[F]
+  random: Entropy2[F],
+  handler: TransportErrorHandler[DomainErrors, AsyncRequest],
 ) extends ClientTransport[F, WsClientRequestContext, Json]
   with AbstractServerHandler[F, BuzzerRequestContext, AsyncRequest, Json]
   with AHCWSListener {
@@ -141,10 +142,18 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
 
   private def handleRequest(value: Json): Unit = {
     val work = for {
-      data <- F.fromEither(value.as[AsyncRequest]).leftMap(f => ServerTransportError.EnvelopeFormatError(value.toString(), f))
-      out <- call(data, data.methodId, data.body)
       conn <- F.sync(session.get())
-      _ <- F.sync(conn.sendTextFrame(AsyncSuccess(Map.empty, out.value, data.id).asJson.printWith(printer)))
+      data <- F.fromEither(value.as[AsyncRequest]).leftMap(f => ServerTransportError.EnvelopeFormatError(value.toString(), f)) // all the improper requests will be ignored
+
+      doCall = for {
+        out <- call(data, data.methodId, data.body)
+      } yield {
+        AsyncSuccess(Map.empty, out.value, data.id)
+      }
+
+      resp <- doCall.sandbox.leftMap(_.toEither)
+        .redeemPure[AsyncResponse](f => AsyncFailure(Map.empty, handler.toRemote(data)(f), Some(data.id)), s => s)
+      _ <- F.sync(conn.sendTextFrame(resp.asJson.printWith(printer)))
     } yield {
 
     }
