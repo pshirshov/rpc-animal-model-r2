@@ -8,9 +8,15 @@ trait ClientRequestHook[-C, O] {
 }
 
 object ClientRequestHook {
-  def passthrough[T]: ClientRequestHook[Any, T] = new ClientRequestHook[Any, T] {
-    override def onRequest(c: Any, methodId: GeneratedServerBase.MethodId, body: Json, request: => T): T = {
-      request
+  class Aux[W] {
+    def passthrough[T]: ClientRequestHook[W, T] = {
+      new ClientRequestHook[W, T] {
+        override def onRequest(c: W, methodId: GeneratedServerBase.MethodId, body: Json, request: => T): T = {
+          request
+        }
+      }
     }
   }
+
+  def forCtx[W]: Aux[W] = new Aux[W]
 }

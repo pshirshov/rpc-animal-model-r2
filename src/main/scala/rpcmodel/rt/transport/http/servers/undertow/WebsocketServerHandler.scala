@@ -15,7 +15,7 @@ import rpcmodel.rt.transport.http.servers.shared.TransportErrorHandler
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
 import rpcmodel.rt.transport.http.servers.undertow.ws.{RuntimeErrorHandler, SessionManager, SessionMetaProvider, WebsocketSession}
 
-class WebsocketServerHandler[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors]
+class WebsocketServerHandler[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, +DomainErrors >: Nothing]
 (
   dec: ContextProvider[F, ServerTransportError, WsServerInRequestContext, C],
   dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],

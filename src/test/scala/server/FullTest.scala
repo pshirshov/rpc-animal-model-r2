@@ -118,11 +118,11 @@ class FullTest extends WordSpec {
 
             val clients = b.map {
               b =>
-                val buzzertransport = new WsBuzzerTransport[IO, CustomWsMeta, OutgoingPushServerCtx](
+                val buzzertransport = new WsBuzzerTransport(
                   PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
                   b,
                   printer,
-                  ClientRequestHook.passthrough,
+                  ClientRequestHook.forCtx[OutgoingPushServerCtx].passthrough,
                   entropy2,
                 )
 
@@ -153,7 +153,7 @@ class FullTest extends WordSpec {
       asyncHttpClient(config()),
       new URL("http://localhost:8080/http"),
       printer,
-      ClientRequestHook.passthrough,
+      ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough,
     )
 
     new GeneratedCalcClientDispatcher(
@@ -170,14 +170,14 @@ class FullTest extends WordSpec {
     }
 
 
-    val transport = new AHCWebsocketClient[IO, C2SOutgoingCtx, IncomingPushClientCtx](
+    val transport = new AHCWebsocketClient(
       asyncHttpClient(config()),
       new URI("ws://localhost:8080/ws"),
       PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
       printer,
-      ClientRequestHook.passthrough,
+      ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough,
       buzzerCtxProvider,
-      dispatchers,
+      dispatchers[IncomingPushClientCtx],
       RuntimeErrorHandler.ignore,
       entropy2,
     )
@@ -224,7 +224,7 @@ class FullTest extends WordSpec {
         }
       }
 
-      new WebsocketServerHandler[IO, CustomWsMeta, IncomingServerCtx, Nothing](
+      new WebsocketServerHandler(
         wsctxdec,
         dispatchers,
         printer,
