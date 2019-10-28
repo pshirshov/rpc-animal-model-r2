@@ -67,7 +67,7 @@ object Envelopes {
       implicit def EnvelopeOut_codec: Codec[AsyncSuccess] = deriveCodec
     }
 
-    case class AsyncFailure(headers: Map[String, Seq[String]], error: Json, id: InvokationId) extends AsyncResponse
+    case class AsyncFailure(headers: Map[String, Seq[String]], error: RemoteError, id: InvokationId) extends AsyncResponse
 
     object AsyncFailure {
       implicit def EnvelopeOutErr_codec: Codec[AsyncFailure] = deriveCodec
@@ -75,5 +75,26 @@ object Envelopes {
 
   }
 
+  sealed trait RemoteError
+
+  object RemoteError {
+    implicit def RemoteError_codec: Codec[RemoteError] = deriveCodec
+
+    case class Transport(message: String) extends RemoteError
+    object Transport {
+      implicit def Transport_codec: Codec.AsObject[Transport] = deriveCodec
+    }
+
+    case class ShortException(kind: String, message: String)
+    object ShortException {
+      def of(t: Throwable): ShortException = ShortException(t.getClass.getName, t.getMessage)
+      implicit def ShortException_codec: Codec.AsObject[ShortException] = deriveCodec
+    }
+
+    case class Critical(messages: Seq[ShortException]) extends RemoteError
+    object Critical {
+      implicit def Critical_codec: Codec.AsObject[Critical] = deriveCodec
+    }
+  }
 }
 
