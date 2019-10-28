@@ -104,7 +104,6 @@ class FullTest extends WordSpec {
         }
 
         val result = runtime.unsafeRunSync(test)
-        println(result)
         assert(result.succeeded && result.toEither == Right((3, -1, 5)))
         ()
     }
@@ -179,7 +178,7 @@ class FullTest extends WordSpec {
       ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough,
       buzzerCtxProvider,
       dispatchers[IncomingPushClientCtx],
-      RuntimeErrorHandler.ignore,
+      RuntimeErrorHandler.print,
       entropy2,
       BasicTransportErrorHandler.withoutDomain,
     )
@@ -205,7 +204,7 @@ class FullTest extends WordSpec {
         printer,
         MethodIdExtractor.TailImpl,
         BasicTransportErrorHandler.withoutDomain,
-        RuntimeErrorHandler.ignore,
+        RuntimeErrorHandler.print,
       )
     }
 
@@ -232,7 +231,7 @@ class FullTest extends WordSpec {
         printer,
         BasicTransportErrorHandler.withoutDomain,
         sessionMetaProvider,
-        RuntimeErrorHandler.ignore,
+        RuntimeErrorHandler.print,
         clock2,
         Entropy.Standard,
       )

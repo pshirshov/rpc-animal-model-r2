@@ -18,6 +18,7 @@ import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncF
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig, TransportErrorHandler}
 import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
+import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler.Context.WebsocketClientSession
 
 
 class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsClientRequestContext, BuzzerRequestContext, +DomainErrors >: Nothing]
@@ -161,13 +162,22 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
   }
 
   private def handleResponse(value: Json): Unit = {
-    for {
-      data <- value.as[AsyncResponse].left.map(f => ServerTransportError.EnvelopeFormatError(value.toString(), f))
-      maybeId <- data.maybeId.toRight(ServerTransportError.UnknownRequest(value.toString()))
-    } yield {
-      pending.put(InvokationId(maybeId.id.take(127)), Some(data))
+    try {
+      val result = for {
+        data <- value.as[AsyncResponse].left.map(f => ServerTransportError.EnvelopeFormatError(value.toString(), f))
+        maybeId <- data.maybeId.toRight(ServerTransportError.UnknownRequest(value.toString()))
+      } yield {
+        pending.put(InvokationId(maybeId.id.take(127)), Some(data))
+      }
+      result match {
+        case Right(_)  =>
+        case Left(err) =>
+          errHandler.onDomain(WebsocketClientSession(), err)
+      }
+    } catch {
+      case t: Throwable =>
+        errHandler.onCritical(WebsocketClientSession(), List(t))
     }
-    ()
   }
 
 }

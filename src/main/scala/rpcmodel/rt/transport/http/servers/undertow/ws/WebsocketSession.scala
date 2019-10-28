@@ -43,6 +43,17 @@ trait RuntimeErrorHandler[T] {
 object RuntimeErrorHandler {
   def ignore[T]: RuntimeErrorHandler[T] = new RuntimeErrorHandler[T] {}
 
+  def print[T]: RuntimeErrorHandler[T] = new RuntimeErrorHandler[T] {
+    override def onCritical(context: Context, value: List[Throwable]): Unit = {
+      System.err.println(s"Unhandled error in $context")
+      value.foreach(_.printStackTrace())
+    }
+
+    override def onDomain(context: Context, value: T): Unit = {
+      System.err.println(s"Unhandled error in $context: $value")
+    }
+  }
+
   sealed trait Context
 
   object Context {
