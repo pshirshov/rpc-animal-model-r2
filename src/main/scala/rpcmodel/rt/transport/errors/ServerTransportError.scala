@@ -12,6 +12,7 @@ object ServerTransportError {
   case class DispatcherError(e: ServerDispatcherError) extends Predefined
   case class MethodIdError(path: String) extends Predefined
   case class MissingService(id: MethodId) extends Predefined
+  case class UnknownRequest(s: String) extends Predefined
   case class JsonCodecError(s: String, e: Throwable) extends Predefined
   case class EnvelopeFormatError(s: String, e: Throwable) extends Predefined
 }

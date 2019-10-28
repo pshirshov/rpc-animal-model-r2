@@ -38,7 +38,7 @@ class TransportModelTest extends WordSpec {
 
         override def dispatch(c: C2SOutgoingCtx, methodId: GeneratedServerBase.MethodId, body: Json): IO[ClientDispatcherError, GeneratedServerBase.ClientResponse[Json]] = {
           for {
-            out <- serverDispatcher.dispatch(methodId, ServerWireRequest(IncomingServerCtx("0.1.2.3", Map("header" -> Seq("value"))), body)).catchAll(sde => IO.fail(ServerError(Json.Null)))
+            out <- serverDispatcher.dispatch(methodId, ServerWireRequest(IncomingServerCtx("0.1.2.3", Map("header" -> Seq("value"))), body)).catchAll(sde => IO.fail(ServerError(???)))
           } yield {
             ClientResponse(out.value)
           }

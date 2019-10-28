@@ -1,7 +1,6 @@
 package rpcmodel.rt.transport.http.clients.ahc
 
 import java.net.URI
-import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 import io.circe.parser.parse
@@ -20,8 +19,6 @@ import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncF
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
-
-import scala.util.Try
 
 
 class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsClientRequestContext, BuzzerRequestContext]
@@ -157,10 +154,10 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
 
   private def handleResponse(value: Json): Unit = {
     for {
-      data <- value.as[AsyncResponse]
-      id <- Try(UUID.fromString(data.id.id)).toEither
+      data <- value.as[AsyncResponse].left.map(f => ServerTransportError.EnvelopeFormatError(value.toString(), f))
+      maybeId <- data.maybeId.toRight(ServerTransportError.UnknownRequest(value.toString()))
     } yield {
-      pending.put(InvokationId(id.toString), Some(data))
+      pending.put(InvokationId(maybeId.id.substring(0, 127)), Some(data))
     }
     ()
   }

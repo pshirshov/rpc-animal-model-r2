@@ -15,7 +15,8 @@ import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
-
+import io.circe.syntax._
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
 // Server replies to incoming request:
 //   - CtxDec may extract additional data from request and pass it as C
 //   - Handlers may be proxied and may consider C
@@ -56,20 +57,23 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
     }
 
     val out: F[Nothing, Unit] = for {
-      out <- result.sandbox.leftMap(_.toEither).redeemPure(handler.onError(exchange), v => TransportResponse.Success(v.value))
-      json = out.value.printWith(printer)
+      out <- result.sandbox.leftMap(_.toEither).redeemPure[TransportResponse](f => TransportResponse.Failure(handler.toRemote(exchange)(f)), v => TransportResponse.Success(v.value))
       _ <- F.sync(exchange.getResponseHeaders.put(Headers.CONTENT_TYPE, "text/json"))
       _ <- F.sync {
         out match {
           case TransportResponse.Success(_) =>
             exchange.setStatusCode(200)
-          case TransportResponse.Failure(_) =>
-            exchange.setStatusCode(400)
-          case TransportResponse.UnexpectedFailure(_) =>
-            exchange.setStatusCode(500)
+          case TransportResponse.Failure(e) =>
+            e match {
+              case RemoteError.Transport(_) =>
+                exchange.setStatusCode(400)
+
+              case RemoteError.Critical(_) =>
+                exchange.setStatusCode(500)
+            }
         }
       }
-      _ <- F.sync(exchange.getResponseSender.send(json))
+      _ <- F.sync(exchange.getResponseSender.send(out.asJson.printWith(printer)))
       _ <- F.sync(exchange.endExchange())
     } yield {
     }

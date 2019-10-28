@@ -39,7 +39,7 @@ object Envelopes {
 
   sealed trait AsyncResponse {
     def headers: Map[String, Seq[String]]
-    def id: InvokationId
+    def maybeId: Option[InvokationId]
   }
 
   object AsyncResponse {
@@ -61,13 +61,17 @@ object Envelopes {
     }))
 
 
-    case class AsyncSuccess(headers: Map[String, Seq[String]], body: Json, id: InvokationId) extends AsyncResponse
+    case class AsyncSuccess(headers: Map[String, Seq[String]], body: Json, id: InvokationId) extends AsyncResponse {
+      override def maybeId: Option[InvokationId] = Some(id)
+    }
 
     object AsyncSuccess {
       implicit def EnvelopeOut_codec: Codec[AsyncSuccess] = deriveCodec
     }
 
-    case class AsyncFailure(headers: Map[String, Seq[String]], error: RemoteError, id: InvokationId) extends AsyncResponse
+    case class AsyncFailure(headers: Map[String, Seq[String]], error: RemoteError, id: Option[InvokationId]) extends AsyncResponse {
+      override def maybeId: Option[InvokationId] = id
+    }
 
     object AsyncFailure {
       implicit def EnvelopeOutErr_codec: Codec[AsyncFailure] = deriveCodec
@@ -80,7 +84,7 @@ object Envelopes {
   object RemoteError {
     implicit def RemoteError_codec: Codec[RemoteError] = deriveCodec
 
-    case class Transport(message: String) extends RemoteError
+    case class Transport(properties: Map[String, Json]) extends RemoteError
     object Transport {
       implicit def Transport_codec: Codec.AsObject[Transport] = deriveCodec
     }

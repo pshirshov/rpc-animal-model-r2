@@ -17,7 +17,7 @@ import izumi.fundamentals.platform.time.Clock2
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.AsyncSuccess
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared._
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
@@ -109,20 +109,22 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
       sbody <- F.pure(message.getData)
       decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
       out <- if (decoded.asObject.exists(_.toMap.contains("methodId"))) { // incoming request
+        val maybeId = decoded.asObject.flatMap(_.toMap.get("id").flatMap(_.asString).map(id => InvokationId(id)))
         for {
           out <- dispatchRequest(channel, sbody, decoded)
             .sandbox.leftMap(_.toEither)
-            .redeemPure(handler.onError(this.ctx), v => TransportResponse.Success(v))
-          json = out.value.printWith(printer)
-          _ <- doSend(json).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
+            .redeemPure[AsyncResponse](f => AsyncFailure(Map.empty, handler.toRemote(this.ctx)(f), maybeId), s => s)
+          json = out.asJson
+          _ <- doSend(json.printWith(printer)).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
         } yield {
         }
       } else {
         for {
           envelope <- F.fromEither(decoded.as[AsyncResponse]).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
+          id <- F.fromOption[InvokationId](envelope.maybeId).leftMap(_ => ServerTransportError.UnknownRequest(sbody))
           now <- now()
           _ <- F.sync {
-            pending.computeIfPresent(envelope.id, (_: InvokationId, u: Option[PendingResponse]) => {
+            pending.computeIfPresent(id, (_: InvokationId, u: Option[PendingResponse]) => {
               u match {
                 case None =>
                   Some(PendingResponse(envelope, now))
@@ -147,7 +149,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
     clock.now().map(_.toLocalDateTime)
   }
 
-  private def dispatchRequest(channel: WebSocketChannel, sbody: String, decoded: Json): F[ServerTransportError, Json] = {
+  private def dispatchRequest(channel: WebSocketChannel, sbody: String, decoded: Json): F[ServerTransportError, AsyncSuccess] = {
     assert(channel == this.ctx.channel)
     for {
       envelope <- F.fromEither(decoded.as[AsyncRequest]).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
@@ -159,7 +161,7 @@ class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors
         }
       }
       result <- call(WsServerInRequestContext(ctx, envelope, sbody), envelope.methodId, envelope.body)
-      out = AsyncSuccess(Map.empty, result.value, envelope.id).asJson
+      out = AsyncSuccess(Map.empty, result.value, envelope.id)
     } yield {
       out
     }
