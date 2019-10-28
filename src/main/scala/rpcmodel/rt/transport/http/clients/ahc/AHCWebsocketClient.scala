@@ -8,8 +8,8 @@ import io.circe.parser.parse
 import io.circe.{Json, Printer}
 import io.netty.util.concurrent.Future
 import izumi.functional.bio.BIO._
-import izumi.functional.bio.{BIOAsync, BIORunner, BIOTransZio}
-import izumi.fundamentals.platform.entropy.{Entropy, Entropy2}
+import izumi.functional.bio.{BIOAsync, BIOPrimitives, BIORunner}
+import izumi.fundamentals.platform.entropy.Entropy2
 import org.asynchttpclient.AsyncHttpClient
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
@@ -20,12 +20,11 @@ import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncF
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
-import zio._
 
 import scala.util.Try
 
 
-class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsClientRequestContext, BuzzerRequestContext]
+class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsClientRequestContext, BuzzerRequestContext]
 (
   client: AsyncHttpClient,
   target: URI,
@@ -71,7 +70,6 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsCli
   }
 
   override def dispatch(c: WsClientRequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[Json]] = {
-    val trans = implicitly[BIOTransZio[F]] // TODO: transzio
     for {
       s <- F.sync(session.get())
       id <- random.nextTimeUUID()
@@ -91,46 +89,37 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOTransZio : BIORunner, WsCli
           ()
       }
 
-      p <- trans.ofZio(Promise.make[ClientDispatcherError, ClientResponse[Json]])
+      p <- BIOPrimitives[F].mkPromise[ClientDispatcherError, ClientResponse[Json]]
 
-      check = trans.ofZio(for {
-        status <- IO.effectTotal(pending.get(iid))
+      check = for {
+        status <- F.sync(pending.get(iid))
         _ <- status match {
           case Some(value) =>
             for {
               _ <- value match {
                 case s: AsyncSuccess =>
-                  p.complete(IO.succeed(ClientResponse(s.body)))
+                  p.succeed(ClientResponse(s.body))
                 case f: AsyncFailure =>
-                  p.complete(IO.fail(ClientDispatcherError.ServerError(f.error)))
+                  p.fail(ClientDispatcherError.ServerError(f.error))
               }
             } yield {
 
             }
 
           case None =>
-            IO.unit
+            F.unit
         }
-        done <- p.isDone
-        out <- if (done) {
-          for {
-            result <- p.poll
-            f <- result match {
-              case Some(value) =>
-                value.map(f => Some(f))
-              case None =>
-                IO.succeed(None)
-            }
-          } yield {
-            f
-          }
+        done <- p.poll
+        out <- (done match {
+          case Some(value) =>
+            value.map(f => Some(f))
 
-        } else {
-          IO.succeed(None)
-        }
+          case None =>
+            F.pure(None)
+        }) : F[ClientDispatcherError, Option[ClientResponse[Json]]]
       } yield {
         out
-      })
+      }
 
       out <- check.repeatUntil(ClientDispatcherError.TimeoutException(iid, methodId), pollingConfig.sleep, pollingConfig.maxAttempts)
     } yield {
