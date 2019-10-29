@@ -17,6 +17,7 @@ import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
 import io.circe.syntax._
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError.ShortException
 // Server replies to incoming request:
 //   - CtxDec may extract additional data from request and pass it as C
 //   - Handlers may be proxied and may consider C
@@ -66,32 +67,25 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
       _ <- F.sync {
         out match {
           case TransportResponse.Success(res) =>
-            exchange.setStatusCode(200)
             res.kind match {
               case ResponseKind.Scalar =>
-                exchange.getResponseHeaders.add(responseTypeHeader, successScalar)
-                exchange.getResponseSender.send(res.value.printWith(printer))
+                scalarResponse(exchange, successScalar, 200, res.value)
 
               case ResponseKind.RpcSuccess =>
-                exchange.getResponseHeaders.add(responseTypeHeader, rpcSuccess)
-                exchange.getResponseSender.send(res.value.asObject.get.values.head.printWith(printer))
+                rpcResponse(exchange, res, rpcSuccess)
+
 
               case ResponseKind.RpcFailure =>
-                exchange.getResponseHeaders.add(responseTypeHeader, rpcFailure)
-                exchange.getResponseSender.send(res.value.asObject.get.values.head.printWith(printer))
+                rpcResponse(exchange, res, rpcFailure)
             }
 
           case TransportResponse.Failure(e) =>
             e match {
               case r: RemoteError.Transport =>
-                exchange.setStatusCode(400)
-                exchange.getResponseHeaders.add(responseTypeHeader, transportFailure)
-                exchange.getResponseSender.send(r.asJson.printWith(printer))
+                scalarResponse(exchange, transportFailure, 400, r.asJson)
 
               case r: RemoteError.Critical =>
-                exchange.setStatusCode(500)
-                exchange.getResponseHeaders.add(responseTypeHeader, criticalFailure)
-                exchange.getResponseSender.send(r.asJson.printWith(printer))
+                scalarResponse(exchange, criticalFailure, 500, r.asJson)
             }
         }
       }
@@ -105,6 +99,21 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
       }
     })
 
+  }
+
+  private def scalarResponse(exchange: HttpServerExchange, scalar: String, code: Int, json: Json): Unit = {
+    exchange.setStatusCode(code)
+    exchange.getResponseHeaders.add(responseTypeHeader, scalar)
+    exchange.getResponseSender.send(json.printWith(printer))
+  }
+
+  private def rpcResponse(exchange: HttpServerExchange, res: ServerWireResponse[Json], kind: String): Unit = {
+    res.value.asObject.flatMap(_.values.headOption) match {
+      case Some(value) =>
+        scalarResponse(exchange, kind, 200, value)
+      case None =>
+        scalarResponse(exchange, criticalFailure, 500, RemoteError.Critical(List(ShortException("Unexpected RPC output", "Server bug: unexpected RPC layer output"))).asJson)
+    }
   }
 }
 
