@@ -14,7 +14,6 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
-import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
 import io.circe.syntax._
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError.ShortException

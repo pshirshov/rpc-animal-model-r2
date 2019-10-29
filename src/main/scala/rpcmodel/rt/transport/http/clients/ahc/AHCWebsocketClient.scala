@@ -17,8 +17,8 @@ import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig, TransportErrorHandler}
-import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler
-import rpcmodel.rt.transport.http.servers.undertow.ws.RuntimeErrorHandler.Context.WebsocketClientSession
+import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler
+import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler.Context.WebsocketClientSession
 
 
 class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsClientRequestContext, BuzzerRequestContext, +DomainErrors >: Nothing]
@@ -26,13 +26,13 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
   client: AsyncHttpClient,
   target: URI,
   pollingConfig: PollingConfig,
-  printer: Printer,
-  hook: ClientRequestHook[WsClientRequestContext, AsyncRequest],
-  buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
   buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
-  errHandler: RuntimeErrorHandler[ServerTransportError],
-  random: Entropy2[F],
+  buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
+  hook: ClientRequestHook[WsClientRequestContext, AsyncRequest],
   handler: TransportErrorHandler[DomainErrors, AsyncRequest],
+  errHandler: RuntimeErrorHandler[ServerTransportError],
+  printer: Printer,
+  random: Entropy2[F],
 ) extends ClientTransport[F, WsClientRequestContext, Json]
   with AbstractServerHandler[F, BuzzerRequestContext, AsyncRequest, Json]
   with AHCWSListener {

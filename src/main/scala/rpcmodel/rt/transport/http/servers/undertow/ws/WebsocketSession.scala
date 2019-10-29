@@ -7,9 +7,8 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import io.circe._
 import io.circe.parser.parse
 import io.circe.syntax._
-import io.undertow.server.HttpServerExchange
 import io.undertow.websockets.core._
-import izumi.functional.bio.{BIOAsync, BIOExit, BIORunner, Clock2}
+import izumi.functional.bio.{BIOAsync, BIORunner, Clock2}
 import izumi.functional.mono.Entropy
 import izumi.fundamentals.platform.functional.Identity
 import rpcmodel.rt.transport.dispatch.ContextProvider
@@ -18,57 +17,14 @@ import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared._
+import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
 
-trait RuntimeErrorHandler[T] {
 
-  def onCritical(context: RuntimeErrorHandler.Context, value: List[Throwable]): Unit = {}
 
-  def onDomain(context: RuntimeErrorHandler.Context, value: T): Unit = {}
 
-  final def handle(context: RuntimeErrorHandler.Context)(f: BIOExit[T, _]): Unit = {
-    f match {
-      case BIOExit.Success(_) =>
-      case failure: BIOExit.Failure[_] =>
-        failure.asInstanceOf[BIOExit.Failure[T]].toEither match {
-          case Left(value) =>
-            onCritical(context, value)
-          case Right(value) =>
-            onDomain(context, value)
-        }
-    }
-  }
-}
 
-object RuntimeErrorHandler {
-  def ignore[T]: RuntimeErrorHandler[T] = new RuntimeErrorHandler[T] {}
-
-  def print[T]: RuntimeErrorHandler[T] = new RuntimeErrorHandler[T] {
-    override def onCritical(context: Context, value: List[Throwable]): Unit = {
-      System.err.println(s"Unhandled error in $context")
-      value.foreach(_.printStackTrace())
-    }
-
-    override def onDomain(context: Context, value: T): Unit = {
-      System.err.println(s"Unhandled error in $context: $value")
-    }
-  }
-
-  sealed trait Context
-
-  object Context {
-
-    case class WebsocketServerSession(ctx: WsConnection, message: BufferedTextMessage) extends Context
-
-    case class WebsocketClientSession() extends Context
-
-    case class HttpRequest(exchange: HttpServerExchange) extends Context
-
-  }
-
-}
-
-class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors]
+protected[undertow] class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors]
 (
   ctx: WsConnection,
   override protected val serverContextProvider: ContextProvider[F, ServerTransportError, WsServerInRequestContext, C],

@@ -1,6 +1,6 @@
 package server
 
-import java.net.{URI, URL}
+import java.net.URI
 import java.util.concurrent.TimeUnit
 
 import io.circe._
@@ -19,8 +19,8 @@ import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncRequest
 import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
-import rpcmodel.rt.transport.http.servers.undertow.ws.{RuntimeErrorHandler, SessionManager, SessionMetaProvider, WsBuzzerTransport}
-import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
+import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
+import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, RuntimeErrorHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
 import zio.clock.Clock
@@ -121,8 +121,8 @@ class FullTest extends WordSpec {
                 val buzzertransport = new WsBuzzerTransport(
                   PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
                   b,
-                  printer,
                   ClientRequestHook.forCtx[OutgoingPushServerCtx].passthrough,
+                  printer,
                   entropy2,
                 )
 
@@ -151,7 +151,7 @@ class FullTest extends WordSpec {
   protected def makeClient(): GeneratedCalcClientDispatcher[IO, C2SOutgoingCtx, Json] = {
     val transport = new AHCHttpClient[IO, C2SOutgoingCtx](
       asyncHttpClient(config()),
-      new URL("http://localhost:8080/http"),
+      new URI("http://localhost:8080/http"),
       printer,
       ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough,
     )
@@ -174,13 +174,13 @@ class FullTest extends WordSpec {
       asyncHttpClient(config()),
       new URI("ws://localhost:8080/ws"),
       PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
-      printer,
-      ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough,
-      buzzerCtxProvider,
       dispatchers[IncomingPushClientCtx],
-      RuntimeErrorHandler.print,
-      entropy2,
+      buzzerCtxProvider,
+      ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough,
       BasicTransportErrorHandler.withoutDomain,
+      RuntimeErrorHandler.print,
+      printer,
+      entropy2,
     )
 
     new GeneratedCalcClientDispatcher(
@@ -226,12 +226,12 @@ class FullTest extends WordSpec {
       }
 
       new WebsocketServerHandler(
-        wsctxdec,
         dispatchers,
-        printer,
-        BasicTransportErrorHandler.withoutDomain,
+        wsctxdec,
         sessionMetaProvider,
+        BasicTransportErrorHandler.withoutDomain,
         RuntimeErrorHandler.print,
+        printer,
         clock2,
         Entropy.Standard,
       )

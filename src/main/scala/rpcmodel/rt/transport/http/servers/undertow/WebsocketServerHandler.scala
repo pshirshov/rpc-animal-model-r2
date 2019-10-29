@@ -12,20 +12,23 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.TransportErrorHandler
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
-import rpcmodel.rt.transport.http.servers.undertow.ws.{RuntimeErrorHandler, SessionManager, SessionMetaProvider, WebsocketSession}
+import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionManagerImpl, SessionMetaProvider, WebsocketSession}
 
 class WebsocketServerHandler[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, +DomainErrors >: Nothing]
 (
-  dec: ContextProvider[F, ServerTransportError, WsServerInRequestContext, C],
   dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
-  printer: Printer,
-  onDomainError: TransportErrorHandler[DomainErrors, WsConnection],
+  dec: ContextProvider[F, ServerTransportError, WsServerInRequestContext, C],
   sessionMetaProvider: SessionMetaProvider[Meta],
+  onDomainError: TransportErrorHandler[DomainErrors, WsConnection],
   errHandler: RuntimeErrorHandler[ServerTransportError.Predefined],
+  printer: Printer,
   clock: Clock2[F],
   entropy: Entropy[Identity]
 ) extends WebSocketConnectionCallback {
-  val sessionManager = new SessionManager[F, Meta]()
+  protected def makeSessionManager(): SessionManager[F, Meta] = {
+    new SessionManagerImpl[F, Meta]()
+  }
+  lazy val sessionManager: SessionManager[F, Meta] = makeSessionManager()
 
   override def onConnect(exchange: WebSocketHttpExchange, channel: WebSocketChannel): Unit = {
     val session = new WebsocketSession(

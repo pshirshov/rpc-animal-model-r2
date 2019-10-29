@@ -16,8 +16,8 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIORunner : BIOPrimitives, Meta
 (
   pollingConfig: PollingConfig,
   client: WsSessionBuzzer[F, Meta],
-  printer: Printer,
   hook: ClientRequestHook[BuzzerRequestContext, AsyncRequest],
+  printer: Printer,
   random: Entropy2[F],
 ) extends ClientTransport[F, BuzzerRequestContext, Json] {
 

@@ -9,15 +9,12 @@ import org.asynchttpclient.netty.ws.NettyWebSocket
 import org.asynchttpclient.ws.{WebSocket, WebSocketListener, WebSocketUpgradeHandler}
 
 
-trait AHCWSListener {
-  def onTextMessage(payload: String): Unit
-}
+protected[clients] class AHCWsClientSession(
+                                             client: AsyncHttpClient,
+                                             target: URI,
+                                             serverListener: AHCWSListener,
+                                           ) {
 
-class AHCWsClientSession(
-                          client: AsyncHttpClient,
-                          target: URI,
-                          serverListener: AHCWSListener,
-                        ) {
   class Listener extends WebSocketListener {
     override def onOpen(websocket: WebSocket): Unit = {}
 
@@ -29,6 +26,7 @@ class AHCWsClientSession(
       serverListener.onTextMessage(payload)
     }
   }
+
   private val listener = new Listener()
 
   private val sess = new AtomicReference[NettyWebSocket](null)

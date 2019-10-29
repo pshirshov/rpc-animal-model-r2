@@ -1,6 +1,6 @@
 package rpcmodel.rt.transport.http.clients.ahc
 
-import java.net.URL
+import java.net.{URI, URL}
 import java.util.function.BiFunction
 
 import io.circe.{Decoder, Json, Printer}
@@ -20,7 +20,7 @@ import rpcmodel.rt.transport.http.servers.undertow.HttpServerHandler
 class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
 (
   client: AsyncHttpClient,
-  target: URL,
+  target: URI,
   printer: Printer,
   hook: ClientRequestHook[RequestContext, BoundRequestBuilder],
 ) extends ClientTransport[F, RequestContext, Json] {
@@ -78,7 +78,15 @@ class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
   }
 
   private def prepare(methodId: GeneratedServerBase.MethodId, body: Json): BoundRequestBuilder = {
-    val url = new URL(target.getProtocol, target.getHost, target.getPort, s"${target.getFile}/${methodId.service.name}/${methodId.method.name}")
+    val url = new URI(
+      target.getScheme,
+      target.getUserInfo,
+      target.getHost,
+      target.getPort,
+      s"${target.getPath}/${methodId.service.name}/${methodId.method.name}",
+      target.getQuery,
+      target.getFragment
+    )
     client
       .preparePost(url.toString)
       .setBody(body.printWith(printer))
