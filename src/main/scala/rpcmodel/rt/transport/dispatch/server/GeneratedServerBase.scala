@@ -39,7 +39,6 @@ abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue]
     r: Req,
     reqBody: ReqBody,
     resBody: ResBody,
-
     kind: ResponseKind,
   ): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
     val codec = implicitly[IRTCodec[ResBody, WValue]]
