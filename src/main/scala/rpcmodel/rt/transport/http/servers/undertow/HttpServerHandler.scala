@@ -26,7 +26,7 @@ import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError.ShortExce
 //   - Client request can be altered, user may pass custom context, C
 //   - Server response may produce a custom context (see ClientResponse) but it will be ignored
 
-class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
+class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, +DomainErrors >: Nothing]
 (
   override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
   override protected val serverContextProvider: ContextProvider[F, ServerTransportError, HttpRequestContext, C],
@@ -97,7 +97,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
         BIORunner[F].unsafeRunAsyncAsEither(out)(errHandler.handle(RuntimeErrorHandler.Context.HttpRequest(exchange)))
       }
     })
-
+    ()
   }
 
   private def scalarResponse(exchange: HttpServerExchange, scalar: String, code: Int, json: Json): Unit = {

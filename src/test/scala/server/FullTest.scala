@@ -13,12 +13,10 @@ import org.scalatest.WordSpec
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncRequest
 import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
-import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
+import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
 import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, RuntimeErrorHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
@@ -163,19 +161,12 @@ class FullTest extends WordSpec {
   }
 
   protected def makeWsClient(): GeneratedCalcClientDispatcher[IO, C2SOutgoingCtx, Json] = {
-    val buzzerCtxProvider = new ContextProvider[IO, ServerTransportError, AsyncRequest, IncomingPushClientCtx] {
-      override def decode(c: AsyncRequest): IO[ServerTransportError, IncomingPushClientCtx] = {
-        IO.succeed(IncomingPushClientCtx())
-      }
-    }
-
-
     val transport = new AHCWebsocketClient(
       asyncHttpClient(config()),
       new URI("ws://localhost:8080/ws"),
       PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
       dispatchers[IncomingPushClientCtx],
-      buzzerCtxProvider,
+      ContextProvider.forF[IO].const(IncomingPushClientCtx()),
       ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough,
       BasicTransportErrorHandler.withoutDomain,
       RuntimeErrorHandler.print,
@@ -193,14 +184,9 @@ class FullTest extends WordSpec {
     val dispatchers = this.dispatchers[IncomingServerCtx]
 
     def makeHttpHandler: HttpServerHandler[IO, IncomingServerCtx, Nothing] = {
-      val serverctxdec = new ContextProvider[IO, ServerTransportError, HttpRequestContext, IncomingServerCtx] {
-        override def decode(c: HttpRequestContext): IO[ServerTransportError, IncomingServerCtx] = {
-          IO.succeed(IncomingServerCtx(c.exchange.getSourceAddress.toString, c.headers))
-        }
-      }
-      new HttpServerHandler[IO, IncomingServerCtx, Nothing](
+      new HttpServerHandler(
         dispatchers,
-        serverctxdec,
+        ContextProvider.forF[IO].pure((w: HttpRequestContext) => IncomingServerCtx(w.exchange.getSourceAddress.toString, w.headers)),
         printer,
         MethodIdExtractor.TailImpl,
         BasicTransportErrorHandler.withoutDomain,
@@ -210,25 +196,15 @@ class FullTest extends WordSpec {
 
 
     def makeWsHandler: WebsocketServerHandler[IO, CustomWsMeta, IncomingServerCtx, Nothing] = {
-      val wsctxdec = new ContextProvider[IO, ServerTransportError, WsServerInRequestContext, IncomingServerCtx] {
-        override def decode(c: WsServerInRequestContext): IO[ServerTransportError, IncomingServerCtx] = {
-          IO.succeed(IncomingServerCtx(c.ctx.channel.getSourceAddress.toString, c.envelope.headers))
-        }
-      }
-
-      val sessionMetaProvider = new SessionMetaProvider[CustomWsMeta] {
-        override def extractInitial(ctx: WsConnection): CustomWsMeta = {
-          CustomWsMeta(List())
-        }
-        override def extract(ctx: WsConnection, previous: CustomWsMeta, envelopeIn: AsyncRequest): Option[CustomWsMeta] = {
-          Some(CustomWsMeta(previous.history ++ List(envelopeIn.id.id)))
-        }
-      }
-
       new WebsocketServerHandler(
         dispatchers,
-        wsctxdec,
-        sessionMetaProvider,
+        ContextProvider.forF[IO].pure((w: WsServerInRequestContext) => IncomingServerCtx(w.ctx.channel.getSourceAddress.toString, w.envelope.headers)),
+        SessionMetaProvider.simple {
+          case (_, Some(prev), Some(req)) =>
+            CustomWsMeta(prev.history ++ List(req.id.id))
+          case (_, _, _) =>
+            CustomWsMeta(List())
+        },
         BasicTransportErrorHandler.withoutDomain,
         RuntimeErrorHandler.print,
         printer,
