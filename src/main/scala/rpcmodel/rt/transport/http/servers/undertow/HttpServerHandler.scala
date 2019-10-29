@@ -6,10 +6,10 @@ import java.nio.charset.StandardCharsets
 import io.circe.parser._
 import io.circe.{Json, Printer}
 import io.undertow.server.{HttpHandler, HttpServerExchange}
-import io.undertow.util.Headers
+import io.undertow.util.{Headers, HttpString}
 import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ServerWireResponse
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{ResponseKind, ServerWireResponse}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse}
@@ -37,7 +37,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
 ) extends AbstractServerHandler[F, C, HttpRequestContext, Json] with HttpHandler {
 
   import izumi.functional.bio.BIO._
-
+  import HttpServerHandler._
 
   override protected def bioAsync: BIOAsync[F] = implicitly
 
@@ -57,23 +57,44 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
     }
 
     val out: F[Nothing, Unit] = for {
-      out <- result.sandbox.leftMap(_.toEither).redeemPure[TransportResponse](f => TransportResponse.Failure(handler.toRemote(exchange)(f)), v => TransportResponse.Success(v.value))
+      out <- result.sandbox.leftMap(_.toEither)
+        .redeemPure[TransportResponse](
+          f => TransportResponse.Failure(handler.toRemote(exchange)(f)),
+          v => TransportResponse.Success(v)
+        )
       _ <- F.sync(exchange.getResponseHeaders.put(Headers.CONTENT_TYPE, "text/json"))
       _ <- F.sync {
         out match {
-          case TransportResponse.Success(_) =>
+          case TransportResponse.Success(res) =>
             exchange.setStatusCode(200)
+            res.kind match {
+              case ResponseKind.Scalar =>
+                exchange.getResponseHeaders.add(responseTypeHeader, successScalar)
+                exchange.getResponseSender.send(res.value.printWith(printer))
+
+              case ResponseKind.RpcSuccess =>
+                exchange.getResponseHeaders.add(responseTypeHeader, rpcSuccess)
+                exchange.getResponseSender.send(res.value.asObject.get.values.head.printWith(printer))
+
+              case ResponseKind.RpcFailure =>
+                exchange.getResponseHeaders.add(responseTypeHeader, rpcFailure)
+                exchange.getResponseSender.send(res.value.asObject.get.values.head.printWith(printer))
+            }
+
           case TransportResponse.Failure(e) =>
             e match {
-              case RemoteError.Transport(_) =>
+              case r: RemoteError.Transport =>
                 exchange.setStatusCode(400)
+                exchange.getResponseHeaders.add(responseTypeHeader, transportFailure)
+                exchange.getResponseSender.send(r.asJson.printWith(printer))
 
-              case RemoteError.Critical(_) =>
+              case r: RemoteError.Critical =>
                 exchange.setStatusCode(500)
+                exchange.getResponseHeaders.add(responseTypeHeader, criticalFailure)
+                exchange.getResponseSender.send(r.asJson.printWith(printer))
             }
         }
       }
-      _ <- F.sync(exchange.getResponseSender.send(out.asJson.printWith(printer)))
       _ <- F.sync(exchange.endExchange())
     } yield {
     }
@@ -88,3 +109,11 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, DomainErrors]
 }
 
 
+object HttpServerHandler {
+  final val responseTypeHeader = HttpString.tryFromString("X-Response-Type")
+  final val transportFailure = "Transport-Failure"
+  final val criticalFailure = "Critical-Failure"
+  final val rpcFailure = "Failure-Domain"
+  final val rpcSuccess = "Success-Domain"
+  final val successScalar = "Success-Scalar"
+}

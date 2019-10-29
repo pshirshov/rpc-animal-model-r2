@@ -34,12 +34,19 @@ abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue]
     F.fromEither(codec.decode(r.value).left.map(f => ServerCodecFailure(f)))
   }
 
-  protected final def doEncode[ResBody: IRTCodec[*, WValue], ReqBody: IRTCodec[*, WValue]](r: Req, reqBody: ReqBody, resBody: ResBody): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
+  protected final def doEncode[ResBody: IRTCodec[*, WValue], ReqBody: IRTCodec[*, WValue]]
+  (
+    r: Req,
+    reqBody: ReqBody,
+    resBody: ResBody,
+
+    kind: ResponseKind,
+  ): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
     val codec = implicitly[IRTCodec[ResBody, WValue]]
     for {
       out <- F.pure(codec.encode(resBody))
     } yield {
-      ServerWireResponse(out)
+      ServerWireResponse(out, kind)
     }
   }
 }
@@ -51,7 +58,13 @@ object GeneratedServerBase {
 
   case class ServerWireRequest[WCtxIn, WValue](c: WCtxIn, value: WValue)
 
-  case class ServerWireResponse[WValue](value: WValue)
+  sealed trait ResponseKind
+  object ResponseKind {
+    object Scalar extends ResponseKind
+    object RpcSuccess extends ResponseKind
+    object RpcFailure extends ResponseKind
+  }
+  case class ServerWireResponse[WValue](value: WValue, kind: ResponseKind)
 
   case class ClientDispatcherException(error: ClientDispatcherError) extends RuntimeException
 

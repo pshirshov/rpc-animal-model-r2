@@ -73,20 +73,20 @@ class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
   override implicit def codec_Output[B: IRTCodec[*, Json], G: IRTCodec[*, Json]]: IRTCodec[RPCResult[B, G], Json] = new IRTCodec[RPCResult[B, G], Json] {
     override def encode(justValue: RPCResult[B, G]): Json = {
       justValue match {
-        case RPCResult.Good(value) => json"""{"s": ${implicitly[IRTCodec[G, Json]].encode(value)}}"""
+        case RPCResult.Good(value) => json"""{${RPCResult.right}: ${implicitly[IRTCodec[G, Json]].encode(value)}}"""
 
-        case RPCResult.Bad(value) => json"""{"f": ${implicitly[IRTCodec[B, Json]].encode(value)}}"""
+        case RPCResult.Bad(value) => json"""{${RPCResult.left}: ${implicitly[IRTCodec[B, Json]].encode(value)}}"""
       }
     }
 
     override def decode(wireValue: Json): Either[List[IRTCodecFailure], RPCResult[B, G]] = {
       wireValue.asObject match {
         case Some(value) =>
-          value.toMap.get("s") match {
+          value.toMap.get(RPCResult.right) match {
             case Some(value) =>
               implicitly[IRTCodec[G, Json]].decode(value).map(v => RPCResult.Good(v))
             case None =>
-              value.toMap.get("f") match {
+              value.toMap.get(RPCResult.left) match {
                 case Some(value) =>
                   implicitly[IRTCodec[B, Json]].decode(value).map(v => RPCResult.Bad(v))
                 case None =>
@@ -122,7 +122,7 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
     for {
       reqBody <- doDecode[SumInput](r)
       resBody <- server.sum(r.c, reqBody.a, reqBody.b).map(v => SumOutput(v))
-      response <- doEncode(r, reqBody, resBody)
+      response <- doEncode(r, reqBody, resBody, ResponseKind.Scalar)
     } yield {
       response
     }
@@ -132,8 +132,11 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
     for {
       reqBody <- doDecode[DivInput](r)
       resBody <- server.div(r.c, reqBody.a, reqBody.b)
-        .redeem[Nothing, RPCResult[ZeroDivisionError, DivOutput]](e => BIOMonadError[F].pure(RPCResult.Bad(e)), g => F.pure(RPCResult.Good(DivOutput(g))))
-      response <- doEncode(r, reqBody, resBody)
+        .redeem[Nothing, RPCResult[ZeroDivisionError, DivOutput]](
+          e => F.pure(RPCResult.Bad(e)),
+          g => F.pure(RPCResult.Good(DivOutput(g))),
+        )
+      response <- doEncode(r, reqBody, resBody, resBody.kind)
     } yield {
       response
     }

@@ -3,16 +3,18 @@ package rpcmodel.rt.transport.http.clients.ahc
 import java.net.URL
 import java.util.function.BiFunction
 
-import io.circe.{Json, Printer}
+import io.circe.{Decoder, Json, Printer}
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.BIOAsync
 import org.asynchttpclient.{AsyncHttpClient, BoundRequestBuilder, Response}
 import rpcmodel.rt.transport.codecs.IRTCodec
+import rpcmodel.rt.transport.dispatch.RPCResult
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
-import rpcmodel.rt.transport.http.servers.shared.TransportResponse
+import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
+import rpcmodel.rt.transport.http.servers.undertow.HttpServerHandler
 
 
 class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
@@ -51,18 +53,28 @@ class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
       body = resp.getResponseBody
       parsed <- F.fromEither(parse(body))
         .leftMap(e => ClientDispatcherError.ClientCodecFailure(List(IRTCodec.IRTCodecFailure.IRTParserException(e))))
-      out <- F.fromEither(parsed.as[TransportResponse])
-        .leftMap(e => ClientDispatcherError.ClientCodecFailure(List(IRTCodec.IRTCodecFailure.IRTParserException(e))))
-      r <- out match {
-        case TransportResponse.Success(data) =>
-          F.pure(ClientResponse(data))
-        case TransportResponse.Failure(error) =>
-          F.fail(ClientDispatcherError.ServerError(error))
+      out <- {
+        resp.getHeader(HttpServerHandler.responseTypeHeader.toString) match {
+          case HttpServerHandler.rpcSuccess =>
+            F.pure(ClientResponse(RPCResult.wireRight(parsed)))
+          case HttpServerHandler.rpcFailure =>
+            F.pure(ClientResponse(RPCResult.wireLeft(parsed)))
+          case HttpServerHandler.successScalar =>
+            F.pure(ClientResponse(parsed))
+          case HttpServerHandler.transportFailure =>
+            parseAs[RemoteError.Transport](parsed).map(ClientDispatcherError.ServerError).flatMap(f => F.fail(f))
+          case HttpServerHandler.criticalFailure =>
+            parseAs[RemoteError.Critical](parsed).map(ClientDispatcherError.ServerError).flatMap(f => F.fail(f))
+        }
       }
     } yield {
-      r
-
+      out
     }
+  }
+
+  def parseAs[T: Decoder](json: Json): F[ClientDispatcherError, T] = {
+    F.fromEither(json.as[T])
+      .leftMap(e => ClientDispatcherError.ClientCodecFailure(List(IRTCodec.IRTCodecFailure.IRTParserException(e))))
   }
 
   private def prepare(methodId: GeneratedServerBase.MethodId, body: Json): BoundRequestBuilder = {
