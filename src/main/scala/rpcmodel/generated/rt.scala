@@ -9,8 +9,11 @@ import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.dispatch._
 import rpcmodel.rt.transport.dispatch.client.{ClientTransport, GeneratedClientBase}
-import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBaseImpl}
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerDispatcherError
+import rpcmodel.rt.transport.rest.IRTRestSpec
+import rpcmodel.rt.transport.rest.IRTRestSpec.IRTExtractorSpec
+import rpcmodel.rt.transport.rest.RestSpec.HttpMethod
 
 trait GeneratedCalcCodecs[WValue] {
   type _IRTCodec1[T] = IRTCodec[T, WValue]
@@ -117,6 +120,10 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
   override def id: ServiceName = ServiceName("CalcService")
 
   val methods: Map[MethodId, Req => F[ServerDispatcherError, Res]] = Map(sumId -> sum, divId -> div)
+  val specs: Map[MethodId, IRTRestSpec] = ??? /* Map(sumId -> IRTRestSpec(
+    HttpMethod.Get,
+    IRTExtractorSpec(Map()),
+  ))*/
 
   private def sum(r: Req): F[ServerDispatcherError, Res] = {
     for {

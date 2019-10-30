@@ -1,12 +1,11 @@
 package rpcmodel.rt.transport.http.servers.undertow.http.model
 
-import io.circe.Json
 import io.undertow.server.HttpServerExchange
+import rpcmodel.rt.transport.http.servers.undertow.HttpBody
 
 case class HttpRequestContext(
                                exchange: HttpServerExchange,
-                               body: Array[Byte],
-                               decoded: Json
+                               body: HttpBody,
                              ) {
 
   import scala.collection.JavaConverters._

@@ -5,11 +5,13 @@ import rpcmodel.rt.transport.codecs.IRTCodec
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.ServerDispatcherError.{MethodHandlerMissing, ServerCodecFailure}
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerDispatcherError}
+import rpcmodel.rt.transport.rest.IRTRestSpec
 
 
 trait GeneratedServerBase[F[_, _], C, WValue] extends ServerContext[F, C, WValue] {
   def id: ServiceName
   def methods: Map[MethodId, Req => F[ServerDispatcherError, Res]]
+  def specs: Map[MethodId, IRTRestSpec]
   def dispatch(methodId: MethodId, r: Req): F[ServerDispatcherError, ServerWireResponse[WValue]]
 }
 

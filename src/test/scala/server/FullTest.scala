@@ -14,7 +14,8 @@ import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook}
-import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
+import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, PollingConfig}
+import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupport
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
@@ -188,7 +189,7 @@ class FullTest extends WordSpec {
         dispatchers,
         ContextProvider.forF[IO].pure((w: HttpRequestContext) => IncomingServerCtx(w.exchange.getSourceAddress.toString, w.headers)),
         printer,
-        MethodIdExtractor.TailImpl,
+        HttpEnvelopeSupport.default,
         BasicTransportErrorHandler.withoutDomain,
         RuntimeErrorHandler.print,
       )

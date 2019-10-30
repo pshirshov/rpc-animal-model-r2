@@ -4,19 +4,22 @@ import java.io.IOException
 import java.nio.charset.StandardCharsets
 
 import io.circe.parser._
+import io.circe.syntax._
 import io.circe.{Json, Printer}
 import io.undertow.server.{HttpHandler, HttpServerExchange}
-import io.undertow.util.{Headers, HttpString}
+import io.undertow.util.{Headers, HttpString, Methods}
+import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{ResponseKind, ServerWireResponse}
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, ResponseKind, ServerWireResponse}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, MethodIdExtractor, TransportErrorHandler, TransportResponse}
-import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
-import io.circe.syntax._
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError.ShortException
+import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, TransportErrorHandler, TransportResponse}
+import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupport
+import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
+
 // Server replies to incoming request:
 //   - CtxDec may extract additional data from request and pass it as C
 //   - Handlers may be proxied and may consider C
@@ -26,32 +29,50 @@ import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError.ShortExce
 //   - Client request can be altered, user may pass custom context, C
 //   - Server response may produce a custom context (see ClientResponse) but it will be ignored
 
+case class HttpBody(json: Json, bytes: Option[Array[Byte]])
+
+case class MethodInput(json: Json, methodId: MethodId)
+
+
 class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, +DomainErrors >: Nothing]
 (
   override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
   override protected val serverContextProvider: ContextProvider[F, ServerTransportError, HttpRequestContext, C],
   printer: Printer,
-  extractor: MethodIdExtractor,
+  extractor: HttpEnvelopeSupport[F],
   handler: TransportErrorHandler[DomainErrors, HttpServerExchange],
   errHandler: RuntimeErrorHandler[Nothing],
 ) extends AbstractServerHandler[F, C, HttpRequestContext, Json] with HttpHandler {
 
-  import izumi.functional.bio.BIO._
   import HttpServerHandler._
 
   override protected def bioAsync: BIOAsync[F] = implicitly
 
   override def handleRequest(exchange: HttpServerExchange): Unit = {
+    def body(): F[ServerTransportError, HttpBody] = {
+      for {
+        bytes <- if (exchange.getRequestMethod == Methods.GET) {
+          F.pure(None)
+        } else {
+          F.async[ServerTransportError, Option[Array[Byte]]](f => {
+            exchange.getRequestReceiver.receiveFullBytes(
+              (_: HttpServerExchange, message: Array[Byte]) => f(Right(Some(message))),
+              (_: HttpServerExchange, e: IOException) => f(Left(ServerTransportError.TransportException(e)))
+            )
+          })
+        }
+        sbody = bytes.map(b => new String(b, StandardCharsets.UTF_8)).getOrElse(Json.obj().toString())
+        decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
+      } yield {
+        HttpBody(decoded, bytes)
+      }
+    }
+
     val result: F[ServerTransportError, ServerWireResponse[Json]] = for {
-      id <- F.fromEither(extractor.extract(exchange.getRequestPath))
-      body <- F.async[ServerTransportError, Array[Byte]](f => {
-        exchange.getRequestReceiver.receiveFullBytes(
-          (_: HttpServerExchange, message: Array[Byte]) => f(Right(message)),
-          (_: HttpServerExchange, e: IOException) => f(Left(ServerTransportError.TransportException(e))))
-      })
-      sbody = new String(body, StandardCharsets.UTF_8)
-      decoded <- F.fromEither(parse(sbody)).leftMap(f => ServerTransportError.JsonCodecError(sbody, f))
-      result <- call(HttpRequestContext(exchange, body, decoded), id, decoded)
+      decoded <- body()
+      context = HttpRequestContext(exchange, decoded)
+      input <- extractor.makeInput(context, dispatchers)
+      result <- call(context, input.methodId, input.json)
     } yield {
       result
     }
