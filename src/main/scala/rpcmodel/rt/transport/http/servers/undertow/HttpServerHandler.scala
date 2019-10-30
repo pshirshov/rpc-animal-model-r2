@@ -94,7 +94,6 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, +DomainErrors >: 
               case ResponseKind.RpcSuccess =>
                 rpcResponse(exchange, res, rpcSuccess)
 
-
               case ResponseKind.RpcFailure =>
                 rpcResponse(exchange, res, rpcFailure)
             }

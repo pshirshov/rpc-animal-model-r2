@@ -120,18 +120,32 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
   override def id: ServiceName = ServiceName("CalcService")
 
   val methods: Map[MethodId, Req => F[ServerDispatcherError, Res]] = Map(sumId -> sum, divId -> div)
-  val specs: Map[MethodId, IRTRestSpec] = Map(sumId -> IRTRestSpec(
-    HttpMethod.Get,
-    IRTExtractorSpec(
-      Map(QueryParameterName("b") -> IRTQueryParameterSpec(IRTBasicField("b"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))),
-      Seq(
-        IRTPathSegment.Word(""),
-        IRTPathSegment.Word("makesum"),
-        IRTPathSegment.Parameter(IRTBasicField("a"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))
-      )
+  val specs: Map[MethodId, IRTRestSpec] = Map(
+    sumId -> IRTRestSpec(
+      HttpMethod.Get,
+      IRTExtractorSpec(
+        Map(QueryParameterName("b") -> IRTQueryParameterSpec(IRTBasicField("b"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))),
+        Seq(
+          IRTPathSegment.Word(""),
+          IRTPathSegment.Word("makesum"),
+          IRTPathSegment.Parameter(IRTBasicField("a"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))
+        )
+      ),
+      IRTBodySpec(Seq.empty),
     ),
-    IRTBodySpec(Seq.empty),
-  ))
+    divId -> IRTRestSpec(
+      HttpMethod.Get,
+      IRTExtractorSpec(
+        Map(QueryParameterName("b") -> IRTQueryParameterSpec(IRTBasicField("b"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))),
+        Seq(
+          IRTPathSegment.Word(""),
+          IRTPathSegment.Word("makediv"),
+          IRTPathSegment.Parameter(IRTBasicField("a"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))
+        )
+      ),
+      IRTBodySpec(Seq.empty),
+    ),
+  )
 
   private def sum(r: Req): F[ServerDispatcherError, Res] = {
     for {

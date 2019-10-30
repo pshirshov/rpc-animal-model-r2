@@ -29,10 +29,11 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
             case (id, spec) =>
               matches(context, id, spec)
           }
-          .headOption
+          .find(_.isDefined)
           .flatten
       }
 
+    println(s"REST mapping: $maybeHandler")
       maybeHandler match {
         case Success(Some(value)) =>
           F.pure(value)
@@ -87,7 +88,7 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
             acc.deepMerge(p)
         }
         println(s"Original: ${context.body.json}")
-        println(s"Patched: $fullPatch")
+        println(s"Patched: $fullPatch => $id")
         Some(MethodInput(fullPatch, id))
       } else {
         None
@@ -122,30 +123,30 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
         (out.isDefined, out)
 
       case IRTRestSpec.OnWireGeneric(tpe) =>
-        tpe match {
+        val out = tpe match {
           case OnWireGenericType.Map(_, vref) =>
             val out = value.toSeq.flatten.flatMap(_.split(',')).map {
               s =>
                 val parts = s.split('=')
                 (parts.head, mapScalar(vref, parts.tail.mkString("=")))
             }
-
-            (true, Some(Json.fromFields(out)))
+            Json.fromFields(out)
 
           case OnWireGenericType.List(ref, unpacked) =>
             if (unpacked) {
-              (true, Some(Json.fromValues(value.toSeq.flatten.map(mapScalar(ref, _)))))
+              Json.fromValues(value.toSeq.flatten.map(mapScalar(ref, _)))
             } else {
-              (true, Some(Json.fromValues(value.toSeq.flatten.flatMap(_.split(',')).map(mapScalar(ref, _)))))
+              Json.fromValues(value.toSeq.flatten.flatMap(_.split(',')).map(mapScalar(ref, _)))
             }
           case OnWireGenericType.Option(ref) =>
             convertScalar(value, path, ref) match {
               case Some(value) =>
-                (true, Some(value))
+                value
               case None =>
-                (true, Some(merge(path, Json.Null)))
+                Json.Null
             }
         }
+        (true, Some(merge(path, out)))
     }
   }
 
