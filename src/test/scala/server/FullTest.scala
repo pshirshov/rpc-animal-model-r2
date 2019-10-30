@@ -14,8 +14,8 @@ import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook}
-import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, PollingConfig}
-import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupport
+import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
+import rpcmodel.rt.transport.http.servers.undertow.http.{HttpEnvelopeSupport, HttpEnvelopeSupportRestImpl}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
@@ -29,8 +29,8 @@ import scala.concurrent.duration.FiniteDuration
 
 object TestMain extends FullTest {
   def main(args: Array[String]): Unit = {
-
-
+    val server = makeServer()._1
+    server.start()
     //    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 2)))
     //    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 0)))
   }
@@ -189,7 +189,8 @@ class FullTest extends WordSpec {
         dispatchers,
         ContextProvider.forF[IO].pure((w: HttpRequestContext) => IncomingServerCtx(w.exchange.getSourceAddress.toString, w.headers)),
         printer,
-        HttpEnvelopeSupport.default,
+        //HttpEnvelopeSupport.default,
+        new HttpEnvelopeSupportRestImpl[IO](MethodIdExtractor.TailImpl),
         BasicTransportErrorHandler.withoutDomain,
         RuntimeErrorHandler.print,
       )

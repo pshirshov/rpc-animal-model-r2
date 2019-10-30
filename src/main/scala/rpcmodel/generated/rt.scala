@@ -12,8 +12,8 @@ import rpcmodel.rt.transport.dispatch.client.{ClientTransport, GeneratedClientBa
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerDispatcherError
 import rpcmodel.rt.transport.rest.IRTRestSpec
-import rpcmodel.rt.transport.rest.IRTRestSpec.IRTExtractorSpec
-import rpcmodel.rt.transport.rest.RestSpec.HttpMethod
+import rpcmodel.rt.transport.rest.IRTRestSpec.{IRTBasicField, IRTBodySpec, IRTExtractorSpec, IRTPathSegment, IRTQueryParameterSpec, IRTType}
+import rpcmodel.rt.transport.rest.RestSpec.{HttpMethod, QueryParameterName}
 
 trait GeneratedCalcCodecs[WValue] {
   type _IRTCodec1[T] = IRTCodec[T, WValue]
@@ -120,10 +120,18 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
   override def id: ServiceName = ServiceName("CalcService")
 
   val methods: Map[MethodId, Req => F[ServerDispatcherError, Res]] = Map(sumId -> sum, divId -> div)
-  val specs: Map[MethodId, IRTRestSpec] = ??? /* Map(sumId -> IRTRestSpec(
+  val specs: Map[MethodId, IRTRestSpec] = Map(sumId -> IRTRestSpec(
     HttpMethod.Get,
-    IRTExtractorSpec(Map()),
-  ))*/
+    IRTExtractorSpec(
+      Map(QueryParameterName("b") -> IRTQueryParameterSpec(IRTBasicField("b"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))),
+      Seq(
+        IRTPathSegment.Word(""),
+        IRTPathSegment.Word("makesum"),
+        IRTPathSegment.Parameter(IRTBasicField("a"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))
+      )
+    ),
+    IRTBodySpec(Seq.empty),
+  ))
 
   private def sum(r: Req): F[ServerDispatcherError, Res] = {
     for {
