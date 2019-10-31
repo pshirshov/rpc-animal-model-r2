@@ -16,19 +16,15 @@ object Escaping {
   @inline final def unescape(s: String): String = URLDecoder.decode(s, "UTF-8")
 }
 
-class RestRequestHook[F[+ _, + _], -RC]
+class RestRequestHook[F[+ _, + _], RC]
 (
   methods: Map[MethodId, IRTRestSpec],
-  target: URI,
-  printer: Printer,
-  client: AsyncHttpClient,
-
-) extends ClientRequestHook[RC, BoundRequestBuilder] {
-  override def onRequest(c: RC, methodId: GeneratedServerBase.MethodId, body: Json, request: => BoundRequestBuilder): BoundRequestBuilder = {
+) extends ClientRequestHook[AHCClientContext[RC], BoundRequestBuilder] {
+  override def onRequest(c: AHCClientContext[RC], methodId: GeneratedServerBase.MethodId, body: Json, request: => BoundRequestBuilder): BoundRequestBuilder = {
     methods.get(methodId) match {
       case Some(value) =>
         try {
-          processRest(body, value)
+          processRest(c, methodId, body, value)
         } catch {
           case t: Throwable =>
             t.printStackTrace()
@@ -69,7 +65,7 @@ class RestRequestHook[F[+ _, + _], -RC]
     }
   }
 
-  private def processRest(body: Json, value: IRTRestSpec): BoundRequestBuilder = {
+  private def processRest(c: AHCClientContext[RC], methodId: GeneratedServerBase.MethodId, body: Json, value: IRTRestSpec): BoundRequestBuilder = {
     val removals = value.extractor.pathSpec.collect {
       case IRTPathSegment.Parameter(field, path, _) =>
         (path :+ field).map(_.name).toList
@@ -90,13 +86,13 @@ class RestRequestHook[F[+ _, + _], -RC]
 
 
     val url = new URI(
-      target.getScheme,
-      target.getUserInfo,
-      target.getHost,
-      target.getPort,
-      target.getPath + newPath.mkString("/"),
-      target.getQuery,
-      target.getFragment
+      c.target.getScheme,
+      c.target.getUserInfo,
+      c.target.getHost,
+      c.target.getPort,
+      c.target.getPath + newPath.mkString("/"),
+      c.target.getQuery,
+      c.target.getFragment
     )
 
     val params: Map[String, List[String]] = value.extractor.queryParameters.map {
@@ -134,14 +130,14 @@ class RestRequestHook[F[+ _, + _], -RC]
     import scala.collection.JavaConverters._
 
     println(s"transformed: $body => ${value.method.name}, $newPath, $params, $newbody")
-    val base = client.prepare(value.method.name.toUpperCase, url.toString)
+    val base = c.client.prepare(value.method.name.toUpperCase, url.toString)
       .setQueryParams(params.mapValues(_.asJava).toMap.asJava)
 
     value.method match {
       case HttpMethod.Get =>
         base
       case _ =>
-        base.setBody(printer.print(newbody))
+        base.setBody(c.printer.print(newbody))
     }
 
 

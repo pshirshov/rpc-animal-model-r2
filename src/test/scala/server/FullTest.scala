@@ -14,7 +14,7 @@ import org.scalatest.WordSpec
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook, RestRequestHook}
+import rpcmodel.rt.transport.http.clients.ahc.{AHCClientContext, AHCHttpClient, AHCWebsocketClient, ClientRequestHook, RestRequestHook}
 import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupportRestImpl
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
@@ -172,9 +172,9 @@ class FullTest extends WordSpec {
 
     val hook = if (rest) {
       val specs = dispatchers[Nothing].flatMap(d => d.specs.toSeq).toMap
-      new RestRequestHook[IO, C2SOutgoingCtx](specs, uri, printer, client)
+      new RestRequestHook[IO, C2SOutgoingCtx](specs)
     } else {
-      ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough[BoundRequestBuilder]
+      ClientRequestHook.forCtx[AHCClientContext[C2SOutgoingCtx]].passthrough[BoundRequestBuilder]
     }
     val transport = new AHCHttpClient[IO, C2SOutgoingCtx](
       client,

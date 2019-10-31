@@ -16,13 +16,14 @@ import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
 import rpcmodel.rt.transport.http.servers.undertow.HttpServerHandler
 
+case class AHCClientContext[RequestContext](rc: RequestContext, printer: Printer, target: URI, client: AsyncHttpClient)
 
 class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
 (
   client: AsyncHttpClient,
   target: URI,
   printer: Printer,
-  hook: ClientRequestHook[RequestContext, BoundRequestBuilder],
+  hook: ClientRequestHook[AHCClientContext[RequestContext], BoundRequestBuilder],
 ) extends ClientTransport[F, RequestContext, Json] {
 
   override def connect(): F[ClientDispatcherError, Unit] = F.unit
@@ -33,7 +34,7 @@ class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
     import io.circe.parser._
 
     for {
-      req <- F.pure(hook.onRequest(c, methodId, body, prepare(methodId, body)))
+      req <- F.pure(hook.onRequest(AHCClientContext(c, printer, target, client), methodId, body, prepare(methodId, body)))
       resp <- F.async[ClientDispatcherError, Response] {
         f =>
 
