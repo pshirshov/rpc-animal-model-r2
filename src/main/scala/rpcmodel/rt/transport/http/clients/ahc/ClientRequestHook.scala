@@ -1,9 +1,7 @@
 package rpcmodel.rt.transport.http.clients.ahc
 
-import scala.annotation.unchecked.uncheckedVariance
-
-trait ClientRequestHook[-C, CTX[T], O] {
-  def onRequest(c: CTX[C@uncheckedVariance], request: CTX[C@uncheckedVariance] => O): O
+trait ClientRequestHook[C, CTX[T], O] {
+  def onRequest(c: CTX[C], request: CTX[C] => O): O
 }
 
 object ClientRequestHook {
