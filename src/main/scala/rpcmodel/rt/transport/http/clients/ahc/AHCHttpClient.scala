@@ -22,11 +22,11 @@ trait BaseClientContext[RequestContext] {
   def rc: RequestContext
 }
 
-case class SimpleRequestContext[RequestContext](
-                                 rc: RequestContext,
-                                 methodId: GeneratedServerBase.MethodId,
-                                 body: Json,
-                               ) extends BaseClientContext[RequestContext]
+//case class SimpleRequestContext[RequestContext](
+//                                 rc: RequestContext,
+//                                 methodId: GeneratedServerBase.MethodId,
+//                                 body: Json,
+//                               ) extends BaseClientContext[RequestContext]
 
 case class AHCClientContext[RequestContext](
                                              rc: RequestContext,

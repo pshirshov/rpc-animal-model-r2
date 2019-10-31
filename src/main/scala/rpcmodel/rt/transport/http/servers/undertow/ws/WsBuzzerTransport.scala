@@ -7,19 +7,25 @@ import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
-import rpcmodel.rt.transport.http.clients.ahc.{ClientRequestHook, SimpleRequestContext}
+import rpcmodel.rt.transport.http.clients.ahc.{BaseClientContext, ClientRequestHook}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{InvokationId, PollingConfig}
 
+case class IdentifiedRequestContext[RequestContext](
+                                             rc: RequestContext,
+                                             invokationId: InvokationId,
+                                             methodId: GeneratedServerBase.MethodId,
+                                             body: Json,
+                                           ) extends BaseClientContext[RequestContext]
 
-class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIORunner : BIOPrimitives, Meta, BuzzerRequestContext]
+class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIORunner : BIOPrimitives, Meta, BzrRequestContext]
 (
   pollingConfig: PollingConfig,
   client: WsSessionBuzzer[F, Meta],
-  hook: ClientRequestHook.Simple[BuzzerRequestContext, AsyncRequest],
+  hook: ClientRequestHook[IdentifiedRequestContext, BzrRequestContext, AsyncRequest],
   printer: Printer,
   random: Entropy2[F],
-) extends ClientTransport[F, BuzzerRequestContext, Json] {
+) extends ClientTransport[F, BzrRequestContext, Json] {
 
   import io.circe.syntax._
 
@@ -27,9 +33,9 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIORunner : BIOPrimitives, Meta
 
   override def disconnect(): F[ClientDispatcherError, Unit] = client.disconnect().leftMap(t => ClientDispatcherError.UnknownException(t))
 
-  override def dispatch(requestContext: BuzzerRequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[Json]] = {
+  override def dispatch(requestContext: BzrRequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[Json]] = {
     def work(id: InvokationId): F[ClientDispatcherError, ClientResponse[Json]] = for {
-      envelope <- F.pure(hook.onRequest(SimpleRequestContext(requestContext, methodId, body), c => AsyncRequest(c.methodId, Map.empty, c.body, id)))
+      envelope <- F.pure(hook.onRequest(IdentifiedRequestContext(requestContext, id, methodId, body), c => AsyncRequest(c.methodId, Map.empty, c.body, c.invokationId)))
       _ <- client.setPending(id)
       _ <- client.send(envelope.asJson.printWith(printer)).leftMap(e => ClientDispatcherError.UnknownException(e))
       p <- BIOPrimitives[F].mkPromise[ClientDispatcherError, ClientResponse[Json]]

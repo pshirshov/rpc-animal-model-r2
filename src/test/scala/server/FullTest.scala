@@ -19,7 +19,7 @@ import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, Me
 import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupportRestImpl
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext
-import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
+import rpcmodel.rt.transport.http.servers.undertow.ws.{IdentifiedRequestContext, SessionManager, SessionMetaProvider, WsBuzzerTransport}
 import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, RuntimeErrorHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
@@ -139,7 +139,7 @@ class FullTest extends WordSpec {
                 val buzzertransport = new WsBuzzerTransport(
                   PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
                   b,
-                  ClientRequestHook.forCtx[OutgoingPushServerCtx].passthrough,
+                  ClientRequestHook.forCtx[OutgoingPushServerCtx, IdentifiedRequestContext].passthrough,
                   printer,
                   entropy2,
                 )
@@ -174,7 +174,7 @@ class FullTest extends WordSpec {
       val specs = dispatchers[Nothing].flatMap(d => d.specs.toSeq).toMap
       new RestRequestHook[IO, C2SOutgoingCtx](specs)
     } else {
-      ClientRequestHook.forCtxEx[C2SOutgoingCtx, AHCClientContext].passthrough[BoundRequestBuilder]
+      ClientRequestHook.forCtx[C2SOutgoingCtx, AHCClientContext].passthrough[BoundRequestBuilder]
     }
     val transport = new AHCHttpClient[IO, C2SOutgoingCtx](
       client,
@@ -196,7 +196,7 @@ class FullTest extends WordSpec {
       PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
       dispatchers[IncomingPushClientCtx],
       ContextProvider.forF[IO].const(IncomingPushClientCtx()),
-      ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough,
+      ClientRequestHook.forCtx[C2SOutgoingCtx, IdentifiedRequestContext].passthrough,
       BasicTransportErrorHandler.withoutDomain,
       RuntimeErrorHandler.print,
       printer,

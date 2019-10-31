@@ -5,7 +5,7 @@ trait ClientRequestHook[F[_], C, O] {
 }
 
 object ClientRequestHook {
-  type Simple[C, O] = ClientRequestHook[SimpleRequestContext, C, O]
+//  type Simple[C, O] = ClientRequestHook[SimpleRequestContext, C, O]
 
   class Aux[W, K[_] <: BaseClientContext[_]] {
     def passthrough[T]: ClientRequestHook[K, W, T] = {
@@ -13,7 +13,7 @@ object ClientRequestHook {
     }
   }
 
-  def forCtx[W]: Aux[W, SimpleRequestContext] = new Aux[W, SimpleRequestContext]
+//  def forCtx[W]: Aux[W, SimpleRequestContext] = new Aux[W, SimpleRequestContext]
 
-  def forCtxEx[W, K[_] <: BaseClientContext[_]]: Aux[W, K] = new Aux[W, K]
+  def forCtx[W, K[_] <: BaseClientContext[_]]: Aux[W, K] = new Aux[W, K]
 }
