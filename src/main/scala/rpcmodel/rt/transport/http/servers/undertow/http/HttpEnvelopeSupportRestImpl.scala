@@ -16,24 +16,42 @@ import rpcmodel.rt.transport.rest.RestSpec.OnWireGenericType
 import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
 
-class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtractor) extends HttpEnvelopeSupport[F] {
-  override def makeInput(context: HttpRequestContext, dispatchers: Seq[GeneratedServerBaseImpl[F, _, Json]]): F[ServerTransportError, MethodInput] = {
 
-    val idx: Map[GeneratedServerBase.MethodId, IRTRestSpec] = dispatchers.flatMap(_.specs.toSeq).toMap
+class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtractor, dispatchers: Seq[GeneratedServerBaseImpl[F, _, Json]]) extends HttpEnvelopeSupport[F] {
 
+  lazy val prefixes: PrefixTree[String, (MethodId, IRTRestSpec)] = {
+    val allMethods = dispatchers.flatMap(_.specs.toSeq)
+    val prefixed = allMethods.map {
+      case (id, spec) =>
+        spec.extractor.pathSpec.takeWhile(_.isInstanceOf[IRTPathSegment.Word]).map(_.asInstanceOf[IRTPathSegment.Word].value) -> (id, spec)
+    }
 
+    PrefixTree.build(prefixed)
+  }
+
+  def indexesFor(path: String): Seq[(MethodId, IRTRestSpec)] = {
+    prefixes.findSubtree(path.split('/').toList).map(_.subtreeValues).toSeq.flatten
+  }
+
+  override def makeInput(context: HttpRequestContext): F[ServerTransportError, MethodInput] = {
+
+    val restCandidates = indexesFor(context.exchange.getRelativePath)
+    println(s"REST mappings to test: $restCandidates")
+    
+    if (restCandidates.isEmpty) {
+      mapRpc(context)
+    } else {
       val maybeHandler = Try {
-        idx
-          .toSeq
+        restCandidates
           .map {
             case (id, spec) =>
               matches(context, id, spec)
           }
           .find(_.isDefined)
           .flatten
-      }
 
-    println(s"REST mapping: $maybeHandler")
+
+      }
       maybeHandler match {
         case Success(Some(value)) =>
           F.pure(value)
@@ -43,20 +61,24 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
               exception.printStackTrace()
             case Success(_) =>
           }
-
-          for {
-            id <- F.fromEither(idExtractor.extract(context.exchange.getRelativePath))
-          } yield {
-            MethodInput(context.body.json, id)
-          }
+          mapRpc(context)
       }
+    }
+  }
+
+  private def mapRpc(context: HttpRequestContext): F[ServerTransportError, MethodInput] = {
+    for {
+      id <- F.fromEither(idExtractor.extract(context.exchange.getRelativePath))
+    } yield {
+      MethodInput(context.body.json, id)
+    }
   }
 
   def matches(context: HttpRequestContext, id: MethodId, spec: IRTRestSpec): Option[MethodInput] = {
     val parts = context.exchange.getRelativePath.split('/')
 
     if (parts.length == spec.extractor.pathSpec.size) {
-      val mapped = spec
+      val mappedPath = spec
         .extractor
         .pathSpec
         .zip(parts)
@@ -77,18 +99,16 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
           convert(Option(context.exchange.getQueryParameters.get(name.value)).map(_.asScala.toSeq), d)
       }
 
-      println(s"mapped path: $mapped")
-      println(s"mapped query: $mappedParams")
+      println(s"mapped path: ${context.exchange.getRelativePath}?${context.exchange.getQueryString} => ${id}, $mappedPath, $mappedParams")
 
-      val all = mapped ++ mappedParams
+      val all = mappedPath ++ mappedParams
       if (all.forall(_._1)) {
         val pathPatch = all.flatMap(_._2.toSeq)
         val fullPatch = pathPatch.foldLeft(context.body.json) {
           case (p, acc) =>
             acc.deepMerge(p)
         }
-        println(s"Original: ${context.body.json}")
-        println(s"Patched: $fullPatch => $id")
+        println(s"Body: ${context.body.json} => $fullPatch")
         Some(MethodInput(fullPatch, id))
       } else {
         None

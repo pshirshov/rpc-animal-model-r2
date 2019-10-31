@@ -71,7 +71,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, +DomainErrors >: 
     val result: F[ServerTransportError, ServerWireResponse[Json]] = for {
       decoded <- body()
       context = HttpRequestContext(exchange, decoded)
-      input <- extractor.makeInput(context, dispatchers)
+      input <- extractor.makeInput(context)
       result <- call(context, input.methodId, input.json)
     } yield {
       result

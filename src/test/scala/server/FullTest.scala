@@ -15,7 +15,7 @@ import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, G
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook}
 import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
-import rpcmodel.rt.transport.http.servers.undertow.http.{HttpEnvelopeSupport, HttpEnvelopeSupportRestImpl}
+import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupportRestImpl
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider, WsBuzzerTransport}
@@ -190,7 +190,7 @@ class FullTest extends WordSpec {
         ContextProvider.forF[IO].pure((w: HttpRequestContext) => IncomingServerCtx(w.exchange.getSourceAddress.toString, w.headers)),
         printer,
         //HttpEnvelopeSupport.default,
-        new HttpEnvelopeSupportRestImpl[IO](MethodIdExtractor.TailImpl),
+        new HttpEnvelopeSupportRestImpl[IO](MethodIdExtractor.TailImpl, dispatchers),
         BasicTransportErrorHandler.withoutDomain,
         RuntimeErrorHandler.print,
       )
