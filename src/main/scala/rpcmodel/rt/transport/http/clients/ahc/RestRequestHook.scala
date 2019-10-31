@@ -41,8 +41,46 @@ class RestRequestHook[F[+ _, + _], -RC]
     }
   }
 
-  private def processRest(body: Json, value: IRTRestSpec) = {
-    val newbody = body
+  def cleanup(body: Json, removals: Seq[List[String]]): Json = {
+    body.asObject match {
+      case Some(value) =>
+        val (toRemove, toDig) = removals.partition(_.size == 1)
+
+        val nextGroups = toDig
+          .map {
+            case head :: tail =>
+              (head, tail)
+          }
+
+        val next = nextGroups
+          .groupBy(_._1)
+          .mapValues(_.map(_._2))
+          .toSeq
+          .flatMap {
+            case (sub, r) =>
+              value.apply(sub).map(s => (sub, cleanup(s, r))).toSeq
+          }
+
+        val leave = value.toMap.removedAll(nextGroups.map(_._1))
+
+        Json.fromFields((next ++ leave).toMap.removedAll(toRemove.map(_.head)))
+      case None =>
+        body
+    }
+  }
+
+  private def processRest(body: Json, value: IRTRestSpec): BoundRequestBuilder = {
+    val removals = value.extractor.pathSpec.collect {
+      case IRTPathSegment.Parameter(field, path, _) =>
+        (path :+ field).map(_.name).toList
+    } ++ value.extractor.queryParameters.toSeq.map {
+      case (_, v) =>
+        (v.path :+ v.field).map(_.name).toList
+    }
+
+    println(removals)
+    val newbody = cleanup(body, removals)
+
 
     val newPath = value.extractor.pathSpec
       .map {
@@ -107,7 +145,6 @@ class RestRequestHook[F[+ _, + _], -RC]
       case _ =>
         base.setBody(printer.print(newbody))
     }
-
 
 
   }
