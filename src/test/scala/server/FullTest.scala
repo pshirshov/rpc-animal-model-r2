@@ -174,7 +174,7 @@ class FullTest extends WordSpec {
       val specs = dispatchers[Nothing].flatMap(d => d.specs.toSeq).toMap
       new RestRequestHook[IO, C2SOutgoingCtx](specs)
     } else {
-      ClientRequestHook.forCtx[AHCClientContext[C2SOutgoingCtx]].passthrough[BoundRequestBuilder]
+      ClientRequestHook.forCtxEx[C2SOutgoingCtx, AHCClientContext].passthrough[BoundRequestBuilder]
     }
     val transport = new AHCHttpClient[IO, C2SOutgoingCtx](
       client,

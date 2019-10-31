@@ -7,7 +7,7 @@ import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
-import rpcmodel.rt.transport.http.clients.ahc.ClientRequestHook
+import rpcmodel.rt.transport.http.clients.ahc.{ClientRequestHook, SimpleRequestContext}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.shared.{InvokationId, PollingConfig}
 
@@ -16,7 +16,7 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIORunner : BIOPrimitives, Meta
 (
   pollingConfig: PollingConfig,
   client: WsSessionBuzzer[F, Meta],
-  hook: ClientRequestHook[BuzzerRequestContext, AsyncRequest],
+  hook: ClientRequestHook[BuzzerRequestContext, SimpleRequestContext, AsyncRequest],
   printer: Printer,
   random: Entropy2[F],
 ) extends ClientTransport[F, BuzzerRequestContext, Json] {
@@ -29,7 +29,7 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIORunner : BIOPrimitives, Meta
 
   override def dispatch(requestContext: BuzzerRequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[Json]] = {
     def work(id: InvokationId): F[ClientDispatcherError, ClientResponse[Json]] = for {
-      envelope <- F.pure(hook.onRequest(requestContext, methodId, body, AsyncRequest(methodId, Map.empty, body, id)))
+      envelope <- F.pure(hook.onRequest(SimpleRequestContext(requestContext, methodId, body), c => AsyncRequest(c.methodId, Map.empty, c.body, id)))
       _ <- client.setPending(id)
       _ <- client.send(envelope.asJson.printWith(printer)).leftMap(e => ClientDispatcherError.UnknownException(e))
       p <- BIOPrimitives[F].mkPromise[ClientDispatcherError, ClientResponse[Json]]

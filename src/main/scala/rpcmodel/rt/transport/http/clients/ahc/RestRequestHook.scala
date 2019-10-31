@@ -2,9 +2,8 @@ package rpcmodel.rt.transport.http.clients.ahc
 
 import java.net.{URI, URLDecoder, URLEncoder}
 
-import io.circe.{Json, Printer}
-import org.asynchttpclient.{AsyncHttpClient, BoundRequestBuilder}
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import io.circe.Json
+import org.asynchttpclient.BoundRequestBuilder
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
 import rpcmodel.rt.transport.rest.IRTRestSpec
 import rpcmodel.rt.transport.rest.IRTRestSpec.IRTPathSegment
@@ -19,12 +18,13 @@ object Escaping {
 class RestRequestHook[F[+ _, + _], RC]
 (
   methods: Map[MethodId, IRTRestSpec],
-) extends ClientRequestHook[AHCClientContext[RC], BoundRequestBuilder] {
-  override def onRequest(c: AHCClientContext[RC], methodId: GeneratedServerBase.MethodId, body: Json, request: => BoundRequestBuilder): BoundRequestBuilder = {
-    methods.get(methodId) match {
+) extends ClientRequestHook[RC, AHCClientContext, BoundRequestBuilder] {
+
+  override def onRequest(c: AHCClientContext[RC], request: AHCClientContext[RC] => BoundRequestBuilder): BoundRequestBuilder = {
+    methods.get(c.methodId) match {
       case Some(value) =>
         try {
-          processRest(c, methodId, body, value)
+          processRest(c, value)
         } catch {
           case t: Throwable =>
             t.printStackTrace()
@@ -33,7 +33,7 @@ class RestRequestHook[F[+ _, + _], RC]
 
 
       case None =>
-        request
+        request(c)
     }
   }
 
@@ -65,7 +65,7 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
-  private def processRest(c: AHCClientContext[RC], methodId: GeneratedServerBase.MethodId, body: Json, value: IRTRestSpec): BoundRequestBuilder = {
+  private def processRest(c: AHCClientContext[RC], value: IRTRestSpec): BoundRequestBuilder = {
     val removals = value.extractor.pathSpec.collect {
       case IRTPathSegment.Parameter(field, path, _) =>
         (path :+ field).map(_.name).toList
@@ -74,14 +74,14 @@ class RestRequestHook[F[+ _, + _], RC]
         (v.path :+ v.field).map(_.name).toList
     }
 
-    val newbody = cleanup(body, removals)
+    val newbody = cleanup(c.body, removals)
 
     val newPath = value.extractor.pathSpec
       .map {
         case IRTPathSegment.Word(value) =>
           value
         case IRTPathSegment.Parameter(field, path, _) =>
-          extract((path :+ field).map(_.name).toList, body)
+          extract((path :+ field).map(_.name).toList, c.body)
       }
 
 
@@ -101,25 +101,25 @@ class RestRequestHook[F[+ _, + _], RC]
 
         val values = v.onWire match {
           case IRTRestSpec.OnWireScalar(_) =>
-            List(extract(path, body))
+            List(extract(path, c.body))
           case IRTRestSpec.OnWireGeneric(tpe) =>
             tpe match {
               case OnWireGenericType.Map(_, _) =>
-                val elements = extractMap(path, body)
+                val elements = extractMap(path, c.body)
                 List(elements.map {
                   case (k, v) =>
                     s"${Escaping.escape(k)}=${Escaping.escape(v)}"
                 }.mkString(","))
 
               case OnWireGenericType.List(_, unpacked) =>
-                val elements = extractList(path, body)
+                val elements = extractList(path, c.body)
                 if (unpacked) {
                   elements
                 } else {
                   List(elements.map(Escaping.escape).mkString(","))
                 }
               case OnWireGenericType.Option(_) =>
-                List(extractMaybe(path, body).getOrElse(""))
+                List(extractMaybe(path, c.body).getOrElse(""))
             }
         }
 
@@ -129,7 +129,7 @@ class RestRequestHook[F[+ _, + _], RC]
 
     import scala.collection.JavaConverters._
 
-    println(s"transformed: $body => ${value.method.name}, $newPath, $params, $newbody")
+    println(s"transformed: ${c.body} => ${value.method.name}, $newPath, $params, $newbody")
     val base = c.client.prepare(value.method.name.toUpperCase, url.toString)
       .setQueryParams(params.mapValues(_.asJava).toMap.asJava)
 

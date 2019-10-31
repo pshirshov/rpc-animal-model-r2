@@ -1,6 +1,6 @@
 package rpcmodel.rt.transport.http.clients.ahc
 
-import java.net.{URI, URL}
+import java.net.URI
 import java.util.function.BiFunction
 
 import io.circe.{Decoder, Json, Printer}
@@ -16,14 +16,33 @@ import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
 import rpcmodel.rt.transport.http.servers.undertow.HttpServerHandler
 
-case class AHCClientContext[RequestContext](rc: RequestContext, printer: Printer, target: URI, client: AsyncHttpClient)
+trait BaseClientContext[RequestContext] {
+  def methodId: GeneratedServerBase.MethodId
+  def body: Json
+  def rc: RequestContext
+}
+
+case class SimpleRequestContext[RequestContext](
+                                 rc: RequestContext,
+                                 methodId: GeneratedServerBase.MethodId,
+                                 body: Json,
+                               ) extends BaseClientContext[RequestContext]
+
+case class AHCClientContext[RequestContext](
+                                             rc: RequestContext,
+                                             printer: Printer,
+                                             target: URI,
+                                             client: AsyncHttpClient,
+                                             methodId: GeneratedServerBase.MethodId,
+                                             body: Json,
+                                           ) extends BaseClientContext[RequestContext]
 
 class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
 (
   client: AsyncHttpClient,
   target: URI,
   printer: Printer,
-  hook: ClientRequestHook[AHCClientContext[RequestContext], BoundRequestBuilder],
+  hook: ClientRequestHook[RequestContext, AHCClientContext, BoundRequestBuilder],
 ) extends ClientTransport[F, RequestContext, Json] {
 
   override def connect(): F[ClientDispatcherError, Unit] = F.unit
@@ -34,7 +53,7 @@ class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
     import io.circe.parser._
 
     for {
-      req <- F.pure(hook.onRequest(AHCClientContext(c, printer, target, client), methodId, body, prepare(methodId, body)))
+      req <- F.pure(hook.onRequest(AHCClientContext(c, printer, target, client, methodId, body), c => prepare(c.methodId, c.body)))
       resp <- F.async[ClientDispatcherError, Response] {
         f =>
 

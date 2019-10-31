@@ -1,22 +1,19 @@
 package rpcmodel.rt.transport.http.clients.ahc
 
-import io.circe.Json
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import scala.annotation.unchecked.uncheckedVariance
 
-trait ClientRequestHook[-C, O] {
-  def onRequest(c: C, methodId: GeneratedServerBase.MethodId, body: Json, request: => O): O
+trait ClientRequestHook[-C, CTX[T], O] {
+  def onRequest(c: CTX[C@uncheckedVariance], request: CTX[C@uncheckedVariance] => O): O
 }
 
 object ClientRequestHook {
-  class Aux[W] {
-    def passthrough[T]: ClientRequestHook[W, T] = {
-      new ClientRequestHook[W, T] {
-        override def onRequest(c: W, methodId: GeneratedServerBase.MethodId, body: Json, request: => T): T = {
-          request
-        }
-      }
+  class Aux1[W, K[_] <: BaseClientContext[_]] {
+    def passthrough[T]: ClientRequestHook[W, K, T] = {
+      (c: K[W], request: K[W] => T) => request(c)
     }
   }
 
-  def forCtx[W]: Aux[W] = new Aux[W]
+  def forCtx[W]: Aux1[W, SimpleRequestContext] = new Aux1[W, SimpleRequestContext]
+
+  def forCtxEx[W, K[_] <: BaseClientContext[_]]: Aux1[W, K] = new Aux1[W, K]
 }
