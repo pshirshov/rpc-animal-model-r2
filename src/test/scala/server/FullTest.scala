@@ -8,12 +8,13 @@ import io.undertow.{Handlers, Undertow}
 import izumi.functional.bio.{BIORunner, Clock2, Entropy2}
 import izumi.functional.mono
 import izumi.functional.mono.Entropy
+import org.asynchttpclient.BoundRequestBuilder
 import org.asynchttpclient.Dsl._
 import org.scalatest.WordSpec
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook}
+import rpcmodel.rt.transport.http.clients.ahc.{AHCHttpClient, AHCWebsocketClient, ClientRequestHook, RestRequestHook}
 import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
 import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupportRestImpl
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
@@ -31,6 +32,9 @@ object TestMain extends FullTest {
   def main(args: Array[String]): Unit = {
     val server = makeServer()._1
     server.start()
+    val client = makeClient(true)
+    println(runtime.unsafeRunSync(client.div(C2SOutgoingCtx(), 6, 2)))
+
     //    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 2)))
     //    println(runtime.unsafeRunSync(wsClient.div(CustomClientCtx(), 6, 0)))
   }
@@ -71,7 +75,7 @@ class FullTest extends WordSpec {
   "transport" should {
     "support http calls" in withServer {
       (_, _) =>
-        val client = makeClient()
+        val client = makeClient(false)
         assert(runtime.unsafeRunSync(client.div(C2SOutgoingCtx(), 6, 2)) == Exit.Success(3))
 
         val negative = for {
@@ -83,7 +87,22 @@ class FullTest extends WordSpec {
 
         assert(runtime.unsafeRunSync(negative).toEither == Right("Got error"))
         ()
+    }
 
+    "support rest mappings" in withServer {
+      (_, _) =>
+        val client = makeClient(true)
+        assert(runtime.unsafeRunSync(client.div(C2SOutgoingCtx(), 6, 2)) == Exit.Success(3))
+
+        val negative = for {
+          res <- client.div(C2SOutgoingCtx(), 6, 0)
+            .catchAll((_: ZeroDivisionError) => IO("Got error"))
+        } yield {
+          res
+        }
+
+        assert(runtime.unsafeRunSync(negative).toEither == Right("Got error"))
+        ()
     }
 
     "support websocket calls" in withServer {
@@ -147,12 +166,21 @@ class FullTest extends WordSpec {
     }
   }
 
-  protected def makeClient(): GeneratedCalcClientDispatcher[IO, C2SOutgoingCtx, Json] = {
+  protected def makeClient(rest: Boolean): GeneratedCalcClientDispatcher[IO, C2SOutgoingCtx, Json] = {
+    val client = asyncHttpClient(config())
+    val uri = new URI("http://localhost:8080/http")
+
+    val hook = if (rest) {
+      val specs = dispatchers[Nothing].flatMap(d => d.specs.toSeq).toMap
+      new RestRequestHook[IO, C2SOutgoingCtx](specs, uri, printer, client)
+    } else {
+      ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough[BoundRequestBuilder]
+    }
     val transport = new AHCHttpClient[IO, C2SOutgoingCtx](
-      asyncHttpClient(config()),
-      new URI("http://localhost:8080/http"),
+      client,
+      uri,
       printer,
-      ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough,
+      hook,
     )
 
     new GeneratedCalcClientDispatcher(

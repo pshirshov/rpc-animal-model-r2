@@ -6,6 +6,7 @@ import izumi.functional.bio.BIO._
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
+import rpcmodel.rt.transport.http.clients.ahc.Escaping
 import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
 import rpcmodel.rt.transport.http.servers.undertow.MethodInput
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
@@ -34,7 +35,7 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
 
   override def makeInput(context: HttpRequestContext): F[ServerTransportError, MethodInput] = {
     val restCandidates = indexesFor(context.exchange.getRelativePath)
-    println(s"REST mappings to test: $restCandidates")
+    println(s"${context.exchange.getQueryString}: REST mappings to test: $restCandidates")
 
     val maybeRest = restCandidates
       .map {
@@ -134,15 +135,17 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
             val out = value.toSeq.flatten.flatMap(_.split(',')).map {
               s =>
                 val parts = s.split('=')
-                mapScalar(vref, parts.tail.mkString("=")).map(j => (parts.head, j))
+                val key = Escaping.unescape(parts.head)
+                val value = Escaping.unescape(parts.tail.mkString("="))
+                mapScalar(vref, value).map(j => (key, j))
             }
             flatten(out).map(Json.fromFields)
 
           case OnWireGenericType.List(ref, unpacked) =>
             val v = if (unpacked) {
-              flatten(value.toSeq.flatten.map(mapScalar(ref, _)))
+              flatten(value.toSeq.flatten.map(Escaping.unescape).map(mapScalar(ref, _)))
             } else {
-              flatten(value.toSeq.flatten.flatMap(_.split(',')).map(mapScalar(ref, _)))
+              flatten(value.toSeq.flatten.map(Escaping.unescape).flatMap(_.split(',')).map(mapScalar(ref, _)))
             }
             v.map(Json.fromValues)
 
