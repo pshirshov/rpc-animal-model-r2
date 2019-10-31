@@ -92,19 +92,19 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, +DomainErrors >: 
                 scalarResponse(exchange, successScalar, 200, res.value)
 
               case ResponseKind.RpcSuccess =>
-                rpcResponse(exchange, res, rpcSuccess)
+                rpcResponse(exchange, res, rpcSuccess, 200)
 
               case ResponseKind.RpcFailure =>
-                rpcResponse(exchange, res, rpcFailure)
+                rpcResponse(exchange, res, rpcFailure, 400)
             }
 
           case TransportResponse.Failure(e) =>
             e match {
               case r: RemoteError.Transport =>
-                scalarResponse(exchange, transportFailure, 400, r.asJson)
+                scalarResponse(exchange, transportFailure, 500, r.asJson)
 
               case r: RemoteError.Critical =>
-                scalarResponse(exchange, criticalFailure, 500, r.asJson)
+                scalarResponse(exchange, criticalFailure, 501, r.asJson)
             }
         }
       }
@@ -126,12 +126,12 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, +DomainErrors >: 
     exchange.getResponseSender.send(json.printWith(printer))
   }
 
-  private def rpcResponse(exchange: HttpServerExchange, res: ServerWireResponse[Json], kind: String): Unit = {
+  private def rpcResponse(exchange: HttpServerExchange, res: ServerWireResponse[Json], kind: String, code: Int): Unit = {
     res.value.asObject.flatMap(_.values.headOption) match {
       case Some(value) =>
-        scalarResponse(exchange, kind, 200, value)
+        scalarResponse(exchange, kind, code, value)
       case None =>
-        scalarResponse(exchange, criticalFailure, 500, RemoteError.Critical(List(ShortException("Unexpected RPC output", "Server bug: unexpected RPC layer output"))).asJson)
+        scalarResponse(exchange, criticalFailure, 501, RemoteError.Critical(List(ShortException("Unexpected RPC output", "Server bug: unexpected RPC layer output"))).asJson)
     }
   }
 }

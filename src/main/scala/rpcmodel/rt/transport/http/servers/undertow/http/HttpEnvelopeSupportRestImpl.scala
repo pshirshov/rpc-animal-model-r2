@@ -4,7 +4,7 @@ import io.circe.Json
 import izumi.functional.bio.BIO
 import izumi.functional.bio.BIO._
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
-import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
 import rpcmodel.rt.transport.http.servers.undertow.MethodInput
@@ -14,7 +14,6 @@ import rpcmodel.rt.transport.rest.IRTRestSpec.{IRTBasicField, IRTPathSegment, IR
 import rpcmodel.rt.transport.rest.RestSpec.OnWireGenericType
 
 import scala.annotation.tailrec
-import scala.util.{Failure, Success, Try}
 
 
 class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtractor, dispatchers: Seq[GeneratedServerBaseImpl[F, _, Json]]) extends HttpEnvelopeSupport[F] {
@@ -34,35 +33,22 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
   }
 
   override def makeInput(context: HttpRequestContext): F[ServerTransportError, MethodInput] = {
-
     val restCandidates = indexesFor(context.exchange.getRelativePath)
     println(s"REST mappings to test: $restCandidates")
-    
-    if (restCandidates.isEmpty) {
-      mapRpc(context)
-    } else {
-      val maybeHandler = Try {
-        restCandidates
-          .map {
-            case (id, spec) =>
-              matches(context, id, spec)
-          }
-          .find(_.isDefined)
-          .flatten
 
+    val maybeRest = restCandidates
+      .map {
+        case (id, spec) =>
+          matches(context, id, spec)
+      }
+      .find(_.isDefined)
+      .flatten
 
-      }
-      maybeHandler match {
-        case Success(Some(value)) =>
-          F.pure(value)
-        case o =>
-          o match {
-            case Failure(exception) =>
-              exception.printStackTrace()
-            case Success(_) =>
-          }
-          mapRpc(context)
-      }
+    maybeRest match {
+      case Some(value) =>
+        F.pure(value)
+      case None =>
+        mapRpc(context)
     }
   }
 
@@ -137,36 +123,41 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
 
   private def convert(value: Option[Seq[String]], p: IRTQueryParameterSpec): (Boolean, Option[Json]) = {
     val path = p.path :+ p.field
-    p.onWire match {
-      case IRTRestSpec.OnWireScalar(ref) =>
-        val out = convertScalar(value, path, ref)
-        (out.isDefined, out)
+    try {
+      p.onWire match {
+        case IRTRestSpec.OnWireScalar(ref) =>
+          val out = convertScalar(value, path, ref)
+          (out.isDefined, out)
 
-      case IRTRestSpec.OnWireGeneric(tpe) =>
-        val out = tpe match {
-          case OnWireGenericType.Map(_, vref) =>
-            val out = value.toSeq.flatten.flatMap(_.split(',')).map {
-              s =>
-                val parts = s.split('=')
-                (parts.head, mapScalar(vref, parts.tail.mkString("=")))
-            }
-            Json.fromFields(out)
+        case IRTRestSpec.OnWireGeneric(tpe) =>
+          val out = tpe match {
+            case OnWireGenericType.Map(_, vref) =>
+              val out = value.toSeq.flatten.flatMap(_.split(',')).map {
+                s =>
+                  val parts = s.split('=')
+                  (parts.head, mapScalar(vref, parts.tail.mkString("=")))
+              }
+              Json.fromFields(out)
 
-          case OnWireGenericType.List(ref, unpacked) =>
-            if (unpacked) {
-              Json.fromValues(value.toSeq.flatten.map(mapScalar(ref, _)))
-            } else {
-              Json.fromValues(value.toSeq.flatten.flatMap(_.split(',')).map(mapScalar(ref, _)))
-            }
-          case OnWireGenericType.Option(ref) =>
-            convertScalar(value, path, ref) match {
-              case Some(value) =>
-                value
-              case None =>
-                Json.Null
-            }
-        }
-        (true, Some(merge(path, out)))
+            case OnWireGenericType.List(ref, unpacked) =>
+              if (unpacked) {
+                Json.fromValues(value.toSeq.flatten.map(mapScalar(ref, _)))
+              } else {
+                Json.fromValues(value.toSeq.flatten.flatMap(_.split(',')).map(mapScalar(ref, _)))
+              }
+            case OnWireGenericType.Option(ref) =>
+              convertScalar(value, path, ref) match {
+                case Some(value) =>
+                  value
+                case None =>
+                  Json.Null
+              }
+          }
+          (true, Some(merge(path, out)))
+      }
+    } catch {
+      case _: Throwable =>
+        (false, None)
     }
   }
 
@@ -189,7 +180,7 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
     }
   }
 
-  private def merge(path: Seq[IRTBasicField], jsonV: Json) = {
+  private def merge(path: Seq[IRTBasicField], jsonV: Json): Json = {
     path.foldRight(jsonV) {
       case (v, acc) =>
         Json.obj((v.name, acc))
