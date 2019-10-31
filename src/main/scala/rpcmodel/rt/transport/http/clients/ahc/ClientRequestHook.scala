@@ -1,12 +1,14 @@
 package rpcmodel.rt.transport.http.clients.ahc
 
-trait ClientRequestHook[C, CTX[_], O] {
-  def onRequest(c: CTX[C], request: CTX[C] => O): O
+trait ClientRequestHook[F[_], C, O] {
+  def onRequest(c: F[C], request: F[C] => O): O
 }
 
 object ClientRequestHook {
+  type Simple[C, O] = ClientRequestHook[SimpleRequestContext, C, O]
+
   class Aux[W, K[_] <: BaseClientContext[_]] {
-    def passthrough[T]: ClientRequestHook[W, K, T] = {
+    def passthrough[T]: ClientRequestHook[K, W, T] = {
       (c: K[W], request: K[W] => T) => request(c)
     }
   }

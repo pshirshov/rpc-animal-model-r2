@@ -18,7 +18,7 @@ object Escaping {
 class RestRequestHook[F[+ _, + _], RC]
 (
   methods: Map[MethodId, IRTRestSpec],
-) extends ClientRequestHook[RC, AHCClientContext, BoundRequestBuilder] {
+) extends ClientRequestHook[AHCClientContext, RC, BoundRequestBuilder] {
 
   override def onRequest(c: AHCClientContext[RC], request: AHCClientContext[RC] => BoundRequestBuilder): BoundRequestBuilder = {
     methods.get(c.methodId) match {

@@ -28,7 +28,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
   pollingConfig: PollingConfig,
   buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
   buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
-  hook: ClientRequestHook[WsClientRequestContext, SimpleRequestContext, AsyncRequest],
+  hook: ClientRequestHook.Simple[WsClientRequestContext, AsyncRequest],
   handler: TransportErrorHandler[DomainErrors, AsyncRequest],
   errHandler: RuntimeErrorHandler[ServerTransportError],
   printer: Printer,
