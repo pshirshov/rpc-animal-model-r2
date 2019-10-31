@@ -124,11 +124,11 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
     sumId -> IRTRestSpec(
       HttpMethod.Get,
       IRTExtractorSpec(
-        Map(QueryParameterName("b") -> IRTQueryParameterSpec(IRTBasicField("b"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))),
+        Map(QueryParameterName("b") -> IRTQueryParameterSpec(IRTBasicField("b"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInteger))),
         Seq(
           IRTPathSegment.Word(""),
           IRTPathSegment.Word("makesum"),
-          IRTPathSegment.Parameter(IRTBasicField("a"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))
+          IRTPathSegment.Parameter(IRTBasicField("a"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInteger))
         )
       ),
       IRTBodySpec(Seq.empty),
@@ -136,11 +136,11 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
     divId -> IRTRestSpec(
       HttpMethod.Get,
       IRTExtractorSpec(
-        Map(QueryParameterName("b") -> IRTQueryParameterSpec(IRTBasicField("b"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))),
+        Map(QueryParameterName("b") -> IRTQueryParameterSpec(IRTBasicField("b"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInteger))),
         Seq(
           IRTPathSegment.Word(""),
           IRTPathSegment.Word("makediv"),
-          IRTPathSegment.Parameter(IRTBasicField("a"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInt))
+          IRTPathSegment.Parameter(IRTBasicField("a"), Seq.empty, IRTRestSpec.OnWireScalar(IRTType.IRTInteger))
         )
       ),
       IRTBodySpec(Seq.empty),

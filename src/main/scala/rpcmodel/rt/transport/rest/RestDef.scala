@@ -12,7 +12,9 @@ object IRTRestSpec {
   sealed trait IRTType
   object IRTType {
     object IRTString extends IRTType
-    object IRTInt extends IRTType
+    object IRTInteger extends IRTType
+    object IRTBool extends IRTType
+    object IRTDouble extends IRTType
   }
 
   final case class IRTBodySpec(fields: Seq[IRTBodyParameter])

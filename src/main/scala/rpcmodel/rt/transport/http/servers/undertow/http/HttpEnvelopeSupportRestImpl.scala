@@ -22,7 +22,7 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
     val allMethods = dispatchers.flatMap(_.specs.toSeq)
     val prefixed = allMethods.map {
       case (id, spec) =>
-        spec.extractor.pathSpec.takeWhile(_.isInstanceOf[IRTPathSegment.Word]).map(_.asInstanceOf[IRTPathSegment.Word].value) -> (id, spec)
+        (spec.extractor.pathSpec.takeWhile(_.isInstanceOf[IRTPathSegment.Word]).map(_.asInstanceOf[IRTPathSegment.Word].value), (id, spec))
     }
 
     PrefixTree.build(prefixed)
@@ -123,60 +123,79 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
 
   private def convert(value: Option[Seq[String]], p: IRTQueryParameterSpec): (Boolean, Option[Json]) = {
     val path = p.path :+ p.field
+    p.onWire match {
+      case IRTRestSpec.OnWireScalar(ref) =>
+        val out = convertScalar(value, path, ref)
+        (out.isDefined, out)
+
+      case IRTRestSpec.OnWireGeneric(tpe) =>
+        val out: Option[Json] = tpe match {
+          case OnWireGenericType.Map(_, vref) =>
+            val out = value.toSeq.flatten.flatMap(_.split(',')).map {
+              s =>
+                val parts = s.split('=')
+                mapScalar(vref, parts.tail.mkString("=")).map(j => (parts.head, j))
+            }
+            flatten(out).map(Json.fromFields)
+
+          case OnWireGenericType.List(ref, unpacked) =>
+            val v = if (unpacked) {
+              flatten(value.toSeq.flatten.map(mapScalar(ref, _)))
+            } else {
+              flatten(value.toSeq.flatten.flatMap(_.split(',')).map(mapScalar(ref, _)))
+            }
+            v.map(Json.fromValues)
+
+          case OnWireGenericType.Option(ref) =>
+            convertScalar(value, path, ref) match {
+              case Some(value) =>
+                Some(value)
+              case None =>
+                Some(Json.Null)
+            }
+        }
+        out match {
+          case Some(value) =>
+            (true, Some(merge(path, value)))
+          case None =>
+            (false, None)
+        }
+    }
+  }
+
+  def flatten[T](values: Seq[Option[T]]): Option[Seq[T]] = {
+    if (values.forall(_.isDefined)) {
+      Some(values.collect({case Some(v) => v}))
+    } else {
+      None
+    }
+  }
+
+  private def convertScalar(value: Option[Seq[String]], path: Seq[IRTBasicField], ref: IRTType): Option[Json] = {
+    for {
+      v <- value
+      first <- v.headOption
+      jsonV <- mapScalar(ref, first)
+    } yield {
+      merge(path, jsonV)
+    }
+  }
+
+  private def mapScalar(ref: IRTType, value: String): Option[Json] = {
     try {
-      p.onWire match {
-        case IRTRestSpec.OnWireScalar(ref) =>
-          val out = convertScalar(value, path, ref)
-          (out.isDefined, out)
-
-        case IRTRestSpec.OnWireGeneric(tpe) =>
-          val out = tpe match {
-            case OnWireGenericType.Map(_, vref) =>
-              val out = value.toSeq.flatten.flatMap(_.split(',')).map {
-                s =>
-                  val parts = s.split('=')
-                  (parts.head, mapScalar(vref, parts.tail.mkString("=")))
-              }
-              Json.fromFields(out)
-
-            case OnWireGenericType.List(ref, unpacked) =>
-              if (unpacked) {
-                Json.fromValues(value.toSeq.flatten.map(mapScalar(ref, _)))
-              } else {
-                Json.fromValues(value.toSeq.flatten.flatMap(_.split(',')).map(mapScalar(ref, _)))
-              }
-            case OnWireGenericType.Option(ref) =>
-              convertScalar(value, path, ref) match {
-                case Some(value) =>
-                  value
-                case None =>
-                  Json.Null
-              }
-          }
-          (true, Some(merge(path, out)))
+      ref match {
+        case IRTType.IRTString =>
+          Some(Json.fromString(value))
+        case IRTType.IRTInteger =>
+          Some(Json.fromLong(java.lang.Long.parseLong(value)))
+        case IRTType.IRTBool =>
+          Some(Json.fromBoolean(java.lang.Boolean.parseBoolean(value)))
+        case IRTType.IRTDouble =>
+          Json.fromDouble(java.lang.Double.parseDouble(value))
       }
     } catch {
       case _: Throwable =>
-        (false, None)
-    }
-  }
-
-  private def convertScalar(value: Option[Seq[String]], path: Seq[IRTBasicField], ref: IRTType) = {
-    value.flatMap(_.headOption) match {
-      case Some(value) =>
-        val jsonV = mapScalar(ref, value)
-        Some(merge(path, jsonV))
-      case None =>
         None
-    }
-  }
-
-  private def mapScalar(ref: IRTType, value: String) = {
-    ref match {
-      case IRTType.IRTString =>
-        Json.fromString(value)
-      case IRTType.IRTInt =>
-        Json.fromInt(Integer.parseInt(value))
     }
   }
 
