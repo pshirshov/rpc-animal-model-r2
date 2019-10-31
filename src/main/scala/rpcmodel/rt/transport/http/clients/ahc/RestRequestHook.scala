@@ -78,9 +78,7 @@ class RestRequestHook[F[+ _, + _], -RC]
         (v.path :+ v.field).map(_.name).toList
     }
 
-    println(removals)
     val newbody = cleanup(body, removals)
-
 
     val newPath = value.extractor.pathSpec
       .map {
