@@ -6,7 +6,7 @@ import rpcmodel.rt.transport.errors.{ServerDispatcherError, ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError.ShortException
 
-abstract class BasicTransportErrorHandler[DomainError, Ctx] extends TransportErrorHandler[DomainError, Ctx] {
+abstract class BasicTransportErrorHandler[-DomainError, -Ctx] extends TransportErrorHandler[DomainError, Ctx] {
   // TODO: withTraces = true
 
   override def toRemote(ctx: Ctx)(err: Either[List[Throwable], ServerTransportError]): Envelopes.RemoteError = {
@@ -55,8 +55,5 @@ abstract class BasicTransportErrorHandler[DomainError, Ctx] extends TransportErr
 }
 
 object BasicTransportErrorHandler {
-  def withoutDomain[Ctx]: BasicTransportErrorHandler[Nothing, Ctx] = new BasicTransportErrorHandler[Any, Ctx] {
-    override def transformDomain(ctx: Ctx, domain: Any): RemoteError = throw new RuntimeException()
-  }.asInstanceOf[BasicTransportErrorHandler[Nothing, Ctx]]
-
+  def withoutDomain: BasicTransportErrorHandler[Any, Any] = (_, _) => throw new RuntimeException()
 }

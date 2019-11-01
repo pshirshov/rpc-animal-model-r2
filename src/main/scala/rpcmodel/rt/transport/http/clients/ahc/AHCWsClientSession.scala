@@ -8,20 +8,17 @@ import org.asynchttpclient.AsyncHttpClient
 import org.asynchttpclient.netty.ws.NettyWebSocket
 import org.asynchttpclient.ws.{WebSocket, WebSocketListener, WebSocketUpgradeHandler}
 
-
-protected[clients] class AHCWsClientSession(
-                                             client: AsyncHttpClient,
-                                             target: URI,
-                                             serverListener: AHCWSListener,
-                                           ) {
+protected[clients] class AHCWsClientSession
+(
+  client: AsyncHttpClient,
+  target: URI,
+  serverListener: AHCWSListener,
+) {
 
   class Listener extends WebSocketListener {
     override def onOpen(websocket: WebSocket): Unit = {}
-
     override def onClose(websocket: WebSocket, code: Int, reason: String): Unit = {}
-
     override def onError(t: Throwable): Unit = {}
-
     override def onTextFrame(payload: String, finalFragment: Boolean, rsv: Int): Unit = {
       serverListener.onTextMessage(payload)
     }

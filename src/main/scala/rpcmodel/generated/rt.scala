@@ -6,13 +6,13 @@ import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
 import rpcmodel.rt.transport.codecs.IRTCodec
 import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.dispatch._
 import rpcmodel.rt.transport.dispatch.client.{ClientTransport, GeneratedClientBase}
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerDispatcherError
 import rpcmodel.rt.transport.rest.IRTRestSpec
-import rpcmodel.rt.transport.rest.IRTRestSpec.{IRTBasicField, IRTBodySpec, IRTExtractorSpec, IRTPathSegment, IRTQueryParameterSpec, IRTType}
+import rpcmodel.rt.transport.rest.IRTRestSpec._
 import rpcmodel.rt.transport.rest.RestSpec.{HttpMethod, QueryParameterName}
 
 trait GeneratedCalcCodecs[WValue] {
@@ -72,7 +72,6 @@ class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
     override def decode(wireValue: Json): Either[List[IRTCodec.IRTCodecFailure], ICalc.ZeroDivisionError] = d[ICalc.ZeroDivisionError](wireValue)
   }
 
-
   override implicit def codec_Output[B: IRTCodec[*, Json], G: IRTCodec[*, Json]]: IRTCodec[RPCResult[B, G], Json] = new IRTCodec[RPCResult[B, G], Json] {
     override def encode(justValue: RPCResult[B, G]): Json = {
       justValue match {
@@ -103,7 +102,6 @@ class GeneratedCalcCodecsCirceJson extends GeneratedCalcCodecsCirce {
   }
 }
 
-
 class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 (
   server: ICalc.Interface[F, C],
@@ -112,7 +110,6 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
 
   import BIO._
   import codecs._
-
 
   private val sumId = MethodId(id, MethodName("sum"))
   private val divId = MethodId(id, MethodName("div"))
@@ -172,7 +169,6 @@ class GeneratedCalcServerDispatcher[F[+ _, + _] : BIOMonadError, C, WValue]
   }
 }
 
-
 class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WValue]
 (
   codecs: GeneratedCalcCodecs[WValue],
@@ -195,10 +191,8 @@ class GeneratedCalcClientDispatcher[F[+ _, + _] : BIOPanic, C, WValue]
       decodedRes.a
     }
 
-
     out.catchAll(e => F.terminate(ClientDispatcherException(e)))
   }
-
 
   override def div(c: C, a: Int, b: Int): F[ZeroDivisionError, Int] = {
     val id = MethodId(ServiceName("CalcService"), MethodName("div"))

@@ -1,32 +1,27 @@
 package server
 
-import java.net.URI
-import java.util.concurrent.TimeUnit
-
 import io.circe._
 import io.undertow.{Handlers, Undertow}
-import izumi.functional.bio.{BIORunner, Clock2, Entropy2}
-import izumi.functional.mono
-import izumi.functional.mono.Entropy
+import izumi.functional.bio._
 import org.asynchttpclient.BoundRequestBuilder
-import org.asynchttpclient.Dsl._
 import org.scalatest.WordSpec
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
+import rpcmodel.rt.transport.IRTBuilder
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.http.clients.ahc.{AHCClientContext, AHCHttpClient, AHCWebsocketClient, ClientRequestHook, RestRequestHook}
-import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig}
+import rpcmodel.rt.transport.http.clients.ahc._
+import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
 import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupportRestImpl
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext
-import rpcmodel.rt.transport.http.servers.undertow.ws.{IdentifiedRequestContext, SessionManager, SessionMetaProvider, WsBuzzerTransport}
-import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, RuntimeErrorHandler, WebsocketServerHandler}
+import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider}
+import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
 import zio.clock.Clock
 import zio.internal.{Platform, PlatformLive}
 
-import scala.concurrent.duration.FiniteDuration
+final case class IncomingPushClientCtx()
 
 object TestMain extends FullTest {
   def main(args: Array[String]): Unit = {
@@ -42,17 +37,10 @@ object TestMain extends FullTest {
 
 class FullTest extends WordSpec {
   protected val codecs: GeneratedCalcCodecs[Json] = new GeneratedCalcCodecsCirceJson()
-  protected val printer: Printer = Printer.spaces2
-  protected val clock2: Clock2[IO] = izumi.functional.mono.Clock.fromImpure[IO[Nothing, ?]](new mono.Clock.Standard())
-  protected val entropy2: Entropy2[IO] = izumi.functional.mono.Entropy.fromImpure[IO[Nothing, ?]](Entropy.Standard)
 
-  protected def dispatchers[T]: Seq[GeneratedCalcServerDispatcher[IO, T, Json]] = {
-    val server = new CalcServerImpl[IO, T]
-    val serverDispatcher = new GeneratedCalcServerDispatcher[IO, T, Json](
-      server,
-      codecs,
-    )
-    Seq(serverDispatcher)
+  protected def dispatchers[Ctx]: Seq[GeneratedCalcServerDispatcher[IO, Ctx, Json]] = {
+    val server = new CalcServerImpl[IO, Ctx]
+    Seq(new GeneratedCalcServerDispatcher(server, codecs))
   }
 
   protected implicit val clock: Clock.Live.type = Clock.Live
@@ -60,7 +48,6 @@ class FullTest extends WordSpec {
     override val Platform: Platform = PlatformLive.makeDefault().withReportFailure(_ => ())
   }
   implicit val runner: BIORunner.ZIORunner = BIORunner.createZIO(PlatformLive.makeDefault()) //.withReportFailure(_ => ())
-
 
   def withServer(test: (Undertow, SessionManager[IO, CustomWsMeta]) => Unit): Unit = {
     val (server, sessman) = makeServer()
@@ -136,20 +123,13 @@ class FullTest extends WordSpec {
 
             val clients = b.map {
               b =>
-                val buzzertransport = new WsBuzzerTransport(
-                  PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
-                  b,
-                  ClientRequestHook.forCtx[OutgoingPushServerCtx, IdentifiedRequestContext].passthrough,
-                  printer,
-                  entropy2,
-                )
+                val buzzertransport = IRTBuilder().makeWsBuzzerTransport(b, ClientRequestHook.forCtx[OutgoingPushServerCtx].passthrough)
 
                 new GeneratedCalcClientDispatcher(
                   codecs,
                   buzzertransport,
                 )
             }
-
 
             ZIO.traverse(clients) {
               c =>
@@ -167,79 +147,51 @@ class FullTest extends WordSpec {
   }
 
   protected def makeClient(rest: Boolean): GeneratedCalcClientDispatcher[IO, C2SOutgoingCtx, Json] = {
-    val client = asyncHttpClient(config())
-    val uri = new URI("http://localhost:8080/http")
-
+    val uri = "http://localhost:8080/http"
     val hook = if (rest) {
       val specs = dispatchers[Nothing].flatMap(d => d.specs.toSeq).toMap
       new RestRequestHook[IO, C2SOutgoingCtx](specs)
     } else {
       ClientRequestHook.forCtx[C2SOutgoingCtx, AHCClientContext].passthrough[BoundRequestBuilder]
     }
-    val transport = new AHCHttpClient[IO, C2SOutgoingCtx](
-      client,
-      uri,
-      printer,
-      hook,
-    )
 
     new GeneratedCalcClientDispatcher(
       codecs,
-      transport,
+      IRTBuilder().makeHttpClient(uri, hook),
     )
   }
 
   protected def makeWsClient(): GeneratedCalcClientDispatcher[IO, C2SOutgoingCtx, Json] = {
-    val transport = new AHCWebsocketClient(
-      asyncHttpClient(config()),
-      new URI("ws://localhost:8080/ws"),
-      PollingConfig(FiniteDuration(100, TimeUnit.MILLISECONDS), 20),
-      dispatchers[IncomingPushClientCtx],
-      ContextProvider.forF[IO].const(IncomingPushClientCtx()),
-      ClientRequestHook.forCtx[C2SOutgoingCtx, IdentifiedRequestContext].passthrough,
-      BasicTransportErrorHandler.withoutDomain,
-      RuntimeErrorHandler.print,
-      printer,
-      entropy2,
+    val transport = IRTBuilder(dispatchers[IncomingPushClientCtx]).makeWsClient(
+      target = "ws://localhost:8080/ws",
+      buzzerContextProvider = ContextProvider.forF[IO].const(IncomingPushClientCtx()),
+      hook = ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough
     )
 
-    new GeneratedCalcClientDispatcher(
-      codecs,
-      transport,
-    )
+    new GeneratedCalcClientDispatcher(codecs, transport)
   }
 
   protected def makeServer(): (Undertow, SessionManager[IO, CustomWsMeta]) = {
     val dispatchers = this.dispatchers[IncomingServerCtx]
 
     def makeHttpHandler: HttpServerHandler[IO, IncomingServerCtx, Nothing] = {
-      new HttpServerHandler(
-        dispatchers,
-        ContextProvider.forF[IO].pure((w: HttpRequestContext) => IncomingServerCtx(w.exchange.getSourceAddress.toString, w.headers)),
-        printer,
-        //HttpEnvelopeSupport.default,
-        new HttpEnvelopeSupportRestImpl[IO](MethodIdExtractor.TailImpl, dispatchers),
-        BasicTransportErrorHandler.withoutDomain,
-        RuntimeErrorHandler.print,
+      IRTBuilder(
+        dispatchers = dispatchers,
+        extractor = Some(new HttpEnvelopeSupportRestImpl[IO](MethodIdExtractor.TailImpl, dispatchers)),
+      ).makeHttpServer(
+        serverContextProvider = ContextProvider.forF[IO].pure((w: HttpRequestContext) => IncomingServerCtx(w.exchange.getSourceAddress.toString, w.headers)),
       )
     }
 
-
     def makeWsHandler: WebsocketServerHandler[IO, CustomWsMeta, IncomingServerCtx, Nothing] = {
-      new WebsocketServerHandler(
-        dispatchers,
-        ContextProvider.forF[IO].pure((w: WsServerInRequestContext) => IncomingServerCtx(w.ctx.channel.getSourceAddress.toString, w.envelope.headers)),
-        SessionMetaProvider.simple {
+      IRTBuilder(dispatchers).makeWsServer(
+        wsServerContextProvider = ContextProvider.forF[IO].pure((w: WsServerInRequestContext) => IncomingServerCtx(w.ctx.channel.getSourceAddress.toString, w.envelope.headers)),
+        sessionMetaProvider = SessionMetaProvider.simple {
           case (_, Some(prev), Some(req)) =>
             CustomWsMeta(prev.history ++ List(req.id.id))
           case (_, _, _) =>
             CustomWsMeta(List())
         },
-        BasicTransportErrorHandler.withoutDomain,
-        RuntimeErrorHandler.print,
-        printer,
-        clock2,
-        Entropy.Standard,
       )
     }
 
@@ -255,7 +207,6 @@ class FullTest extends WordSpec {
           .addExactPath("ws", Handlers.websocket(wsHandler)),
       )
       .build()
-
 
     (s, wsHandler.sessionManager)
   }

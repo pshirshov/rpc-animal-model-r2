@@ -12,7 +12,7 @@ import izumi.functional.bio.{BIOAsync, BIORunner, Clock2}
 import izumi.functional.mono.Entropy
 import izumi.fundamentals.platform.functional.Identity
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
@@ -20,22 +20,18 @@ import rpcmodel.rt.transport.http.servers.shared._
 import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
 
-
-
-
-
 protected[undertow] class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, Meta, C, DomainErrors]
 (
   ctx: WsConnection,
   override protected val serverContextProvider: ContextProvider[F, ServerTransportError, WsServerInRequestContext, C],
-  override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
+  override protected val dispatchers: Seq[GeneratedServerBase[F, C, Json]],
   printer: Printer,
   handler: TransportErrorHandler[DomainErrors, WsConnection],
   sessions: SessionManager[F, Meta],
   sessionMetaProvider: SessionMetaProvider[Meta],
   errHandler: RuntimeErrorHandler[ServerTransportError.Predefined],
   clock: Clock2[F],
-  entropy: Entropy[Identity]
+  entropy: Entropy[Identity],
 ) extends AbstractReceiveListener with AbstractServerHandler[F, C, WsServerInRequestContext, Json] {
 
   def makeBuzzer(): WsSessionBuzzer[F, Meta] = new WsSessionBuzzer(this)
@@ -50,7 +46,7 @@ protected[undertow] class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, M
   val meta = new AtomicReference(sessionMetaProvider.extractInitial(ctx))
   private val terminated = new AtomicBoolean(false)
 
-  def init(): Unit = {
+  private def init(): Unit = {
     sessions.register(this)
   }
 
@@ -81,8 +77,7 @@ protected[undertow] class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, M
             .redeemPure[AsyncResponse](f => AsyncFailure(Map.empty, handler.toRemote(this.ctx)(f), maybeId), s => s)
           json = out.asJson
           _ <- doSend(json.printWith(printer)).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
-        } yield {
-        }
+        } yield ()
       } else {
         for {
           envelope <- F.fromEither(decoded.as[AsyncResponse]).leftMap(f => ServerTransportError.EnvelopeFormatError(sbody, f))
@@ -101,9 +96,7 @@ protected[undertow] class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, M
         } yield {
         }
       }
-    } yield {
-      out
-    }
+    } yield out
 
     if (!terminated.get()) {
       BIORunner[F].unsafeRunAsyncAsEither(result)(errHandler.handle(RuntimeErrorHandler.Context.WebsocketServerSession(ctx, message)))
@@ -127,9 +120,7 @@ protected[undertow] class WebsocketSession[F[+ _, + _] : BIOAsync : BIORunner, M
       }
       result <- call(WsServerInRequestContext(ctx, envelope, sbody), envelope.methodId, envelope.body)
       out = AsyncSuccess(Map.empty, result.value, envelope.id)
-    } yield {
-      out
-    }
+    } yield out
   }
 
   def doSend(value: String): F[Throwable, Unit] = {

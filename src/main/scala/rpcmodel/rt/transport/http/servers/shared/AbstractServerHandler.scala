@@ -2,8 +2,8 @@ package rpcmodel.rt.transport.http.servers.shared
 
 import izumi.functional.bio.BIOAsync
 import rpcmodel.rt.transport.dispatch.ContextProvider
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, ServerWireRequest, ServerWireResponse}
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 
 trait AbstractServerHandler[F[+ _, + _], TransportContext, ServerTransportContext, WireBody] {
@@ -12,8 +12,7 @@ trait AbstractServerHandler[F[+ _, + _], TransportContext, ServerTransportContex
 
   protected implicit def bioAsync: BIOAsync[F]
 
-  protected def dispatchers: Seq[GeneratedServerBaseImpl[F, TransportContext, WireBody]]
-
+  protected def dispatchers: Seq[GeneratedServerBase[F, TransportContext, WireBody]]
   protected def serverContextProvider: ContextProvider[F, ServerTransportError, ServerTransportContext, TransportContext]
 
   private lazy val methods = dispatchers
@@ -32,8 +31,6 @@ trait AbstractServerHandler[F[+ _, + _], TransportContext, ServerTransportContex
       svcm <- F.fromOption(ServerTransportError.MissingService(id))(methods.get(id.service))
       ctx <- serverContextProvider.decode(headers)
       out <- svcm.dispatch(id, ServerWireRequest(ctx, decoded)).leftMap(f => ServerTransportError.DispatcherError(f): ServerTransportError)
-    } yield {
-      out
-    }
+    } yield out
   }
 }
