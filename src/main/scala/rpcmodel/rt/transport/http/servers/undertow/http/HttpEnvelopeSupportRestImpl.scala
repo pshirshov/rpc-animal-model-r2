@@ -3,15 +3,14 @@ package rpcmodel.rt.transport.http.servers.undertow.http
 import io.circe.Json
 import izumi.functional.bio.BIO
 import izumi.functional.bio.BIO._
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
-import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
-import rpcmodel.rt.transport.errors.ClientDispatcherError.RestMappingError
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.clients.ahc.Escaping
 import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
 import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler.Context.RestMappingSupport
-import rpcmodel.rt.transport.http.servers.undertow.{MethodInput, RuntimeErrorHandler}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
+import rpcmodel.rt.transport.http.servers.undertow.{MethodInput, RuntimeErrorHandler}
 import rpcmodel.rt.transport.rest.IRTRestSpec
 import rpcmodel.rt.transport.rest.IRTRestSpec.{IRTBasicField, IRTPathSegment, IRTQueryParameterSpec, IRTType}
 import rpcmodel.rt.transport.rest.RestSpec.OnWireGenericType

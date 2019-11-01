@@ -10,12 +10,10 @@ import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, G
 import rpcmodel.rt.transport.IRTBuilder
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.http.clients.ahc._
-import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
-import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupportRestImpl
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.{IdentifiedRequestContext, SessionManager, SessionMetaProvider}
-import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, RuntimeErrorHandler, WebsocketServerHandler}
+import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
 import zio.clock.Clock
@@ -175,10 +173,7 @@ class FullTest extends WordSpec {
     val dispatchers = this.dispatchers[IncomingServerCtx]
 
     def makeHttpHandler: HttpServerHandler[IO, IncomingServerCtx, Nothing] = {
-      IRTBuilder(
-        dispatchers = dispatchers,
-        extractor = Some(new HttpEnvelopeSupportRestImpl[IO](MethodIdExtractor.TailImpl, dispatchers, RuntimeErrorHandler.print)),
-      ).makeHttpServer(
+      IRTBuilder(dispatchers).makeHttpRestServer(
         serverContextProvider = ContextProvider.forF[IO].pure((w: HttpRequestContext) => IncomingServerCtx(w.exchange.getSourceAddress.toString, w.headers)),
       )
     }
