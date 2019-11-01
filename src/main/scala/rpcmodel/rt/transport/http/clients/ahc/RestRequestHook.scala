@@ -85,7 +85,7 @@ class RestRequestHook[F[+ _, + _], RC]
         case IRTPathSegment.Word(value) =>
           Right(value)
         case IRTPathSegment.Parameter(field, path, _) =>
-          extract((path :+ field).map(_.name).toList, c.body)
+          extract(List.empty, c.body)((path :+ field).map(_.name).toList, c.body)
       }.biAggregate
 
 
@@ -98,14 +98,14 @@ class RestRequestHook[F[+ _, + _], RC]
           val values = v.onWire match {
             case IRTRestSpec.OnWireScalar(_) =>
               for {
-                l <- extract(path, c.body)
+                l <- extract(List.empty, c.body)(path, c.body)
               } yield {
                 List(l)
               }
             case IRTRestSpec.OnWireGeneric(tpe) =>
               tpe match {
                 case OnWireGenericType.Map(_, _) =>
-                  val elements = extractMap(path, c.body)
+                  val elements = extractMap(List.empty, c.body)(path, c.body)
                   for {
                     m <- elements
                   } yield {
@@ -116,7 +116,7 @@ class RestRequestHook[F[+ _, + _], RC]
                   }
 
                 case OnWireGenericType.List(_, unpacked) =>
-                  val elements = extractList(path, c.body)
+                  val elements = extractList(List.empty, c.body)(path, c.body)
                   if (unpacked) {
                     elements
                   } else {
@@ -129,7 +129,7 @@ class RestRequestHook[F[+ _, + _], RC]
                   }
                 case OnWireGenericType.Option(_) =>
                   for {
-                    l <- extractMaybe(path, c.body)
+                    l <- extractMaybe(List.empty, c.body)(path, c.body)
                   } yield {
                     List(l.getOrElse(""))
                   }
@@ -177,15 +177,15 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
-  private def extract(path: List[String], json: Json): Either[List[MappingError], String] = {
+  private def extract(currentPath: List[String], baseJson: Json)(path: List[String], json: Json): Either[List[MappingError], String] = {
     path match {
       case Nil =>
-        foldScalar(json)
+        foldScalar(currentPath, baseJson)(json)
       case head :: tail =>
         for {
-          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
-          el <- obj.apply(head).toRight(List(MappingError.ElementExpected(head)))
-          v <- extract(tail, el)
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected(currentPath, baseJson)))
+          el <- obj.apply(head).toRight(List(MappingError.ElementExpected(currentPath, baseJson, head)))
+          v <- extract(currentPath :+ head, baseJson)(tail, el)
         } yield {
           v
         }
@@ -193,17 +193,17 @@ class RestRequestHook[F[+ _, + _], RC]
   }
 
 
-  private def extractMap(path: List[String], json: Json): Either[List[MappingError], Map[String, String]] = {
+  private def extractMap(currentPath: List[String], baseJson: Json)(path: List[String], json: Json): Either[List[MappingError], Map[String, String]] = {
     path match {
       case Nil =>
         for {
-          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected(currentPath, baseJson)))
           v <- obj.toMap
             .toSeq
             .map {
               case (k, v) =>
 
-                foldScalar(v).map(j => (k, j))
+                foldScalar(currentPath, baseJson)(v).map(j => (k, j))
             }
             .biAggregate
             .map(_.toMap)
@@ -213,9 +213,9 @@ class RestRequestHook[F[+ _, + _], RC]
 
       case head :: tail =>
         for {
-          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
-          el <- obj.apply(head).toRight(List(MappingError.ElementExpected(head)))
-          v <- extractMap(tail, el)
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected(currentPath, baseJson)))
+          el <- obj.apply(head).toRight(List(MappingError.ElementExpected(currentPath, baseJson, head)))
+          v <- extractMap(currentPath :+ head, baseJson)(tail, el)
         } yield {
           v
         }
@@ -223,41 +223,41 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
-  private def extractList(path: List[String], json: Json): Either[List[MappingError], List[String]] = {
+  private def extractList(currentPath: List[String], baseJson: Json)(path: List[String], json: Json): Either[List[MappingError], List[String]] = {
     path match {
       case Nil =>
         for {
-          arr <- json.asArray.toRight(List(MappingError.ArrayExpected()))
-          v <- arr.map(foldScalar).toList.biAggregate
+          arr <- json.asArray.toRight(List(MappingError.ArrayExpected(currentPath, baseJson)))
+          v <- arr.map(foldScalar(currentPath, baseJson)).toList.biAggregate
         } yield {
           v
         }
 
       case head :: tail =>
         for {
-          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
-          el <- obj.apply(head).toRight(List(MappingError.ElementExpected(head)))
-          v <- extractList(tail, el)
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected(currentPath, baseJson)))
+          el <- obj.apply(head).toRight(List(MappingError.ElementExpected(currentPath, baseJson, head)))
+          v <- extractList(currentPath :+ head, baseJson)(tail, el)
         } yield {
           v
         }
     }
   }
 
-  private def extractMaybe(path: List[String], json: Json): Either[List[MappingError], Option[String]] = {
+  private def extractMaybe(currentPath: List[String], baseJson: Json)(path: List[String], json: Json): Either[List[MappingError], Option[String]] = {
     path match {
       case Nil =>
         for {
-          value <- foldScalar(json)
+          value <- foldScalar(currentPath, baseJson)(json)
         } yield {
           Some(value)
         }
       case head :: tail =>
         for {
-          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected(currentPath, baseJson)))
           v <- obj.apply(head) match {
             case Some(value) =>
-              extractMaybe(tail, value)
+              extractMaybe(currentPath :+ head, baseJson)(tail, value)
             case None =>
               Right(None)
           }
@@ -267,8 +267,8 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
-  private def foldScalar(json: Json): Either[List[MappingError], String] = {
-    def onError = Left(List(MappingError.UnexpectedNonScalarEntity(json)))
+  private def foldScalar(currentPath: List[String], baseJson: Json)(json: Json): Either[List[MappingError], String] = {
+    def onError = Left(List(MappingError.UnexpectedNonScalarEntity(currentPath, baseJson, json)))
 
     json.fold(
       onError,
@@ -287,11 +287,11 @@ object RestRequestHook {
 
   object MappingError {
 
-    case class ObjectExpected() extends MappingError
-    case class ArrayExpected() extends MappingError
-    case class ElementExpected(name: String) extends MappingError
+    case class ObjectExpected(currentPath: List[String], baseJson: Json) extends MappingError
+    case class ArrayExpected(currentPath: List[String], baseJson: Json) extends MappingError
+    case class ElementExpected(currentPath: List[String], baseJson: Json, name: String) extends MappingError
     case class UnexpectedEmptyRemoval(body: Json, removals: Seq[List[String]]) extends MappingError
-    case class UnexpectedNonScalarEntity(json: Json) extends MappingError
+    case class UnexpectedNonScalarEntity(currentPath: List[String], baseJson: Json, json: Json) extends MappingError
 
   }
 
