@@ -4,15 +4,14 @@ import java.net.{URI, URLDecoder, URLEncoder}
 
 import io.circe.Json
 import org.asynchttpclient.BoundRequestBuilder
+import rpcmodel.rt.transport.IzEither._
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
+import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.http.clients.ahc.RestRequestHook.MappingError
+import rpcmodel.rt.transport.http.clients.ahc.RestRequestHook.MappingError.UnexpectedEmptyRemoval
 import rpcmodel.rt.transport.rest.IRTRestSpec
 import rpcmodel.rt.transport.rest.IRTRestSpec.IRTPathSegment
 import rpcmodel.rt.transport.rest.RestSpec.{HttpMethod, OnWireGenericType}
-import rpcmodel.rt.transport.IzEither._
-import rpcmodel.rt.transport.errors.ClientDispatcherError
-
-import scala.annotation.tailrec
 
 object Escaping {
   @inline final def escape(s: String): String = URLEncoder.encode(s, "UTF-8")
@@ -25,46 +24,49 @@ class RestRequestHook[F[+ _, + _], RC]
   methods: Map[MethodId, IRTRestSpec],
 ) extends ClientRequestHook[AHCClientContext[RC], BoundRequestBuilder] {
 
-  override def onRequest(c: AHCClientContext[RC], request: AHCClientContext[RC] => BoundRequestBuilder): Either[ClientDispatcherError , BoundRequestBuilder] = {
+  override def onRequest(c: AHCClientContext[RC], request: AHCClientContext[RC] => BoundRequestBuilder): Either[ClientDispatcherError, BoundRequestBuilder] = {
     methods.get(c.methodId) match {
       case Some(value) =>
-        val out = processRest(c, value).left.map(e => ClientDispatcherError.RestMappingError(e))
-        println(out)
-        out
-
+        processRest(c, value).left.map(e => ClientDispatcherError.RestMappingError(e))
 
       case None =>
         Right(request(c))
     }
   }
 
-  def cleanup(body: Json, removals: Seq[List[String]]): Json = {
+  def cleanup(body: Json, removals: Seq[List[String]]): Either[List[MappingError], Json] = {
     body.asObject match {
       case Some(value) =>
         val (toRemove, toDig) = removals.partition(_.size == 1)
+        for {
+          nextGroups <- toDig
+            .map {
+              case Nil =>
+                Left(List(UnexpectedEmptyRemoval(body, removals)))
+              case head :: tail =>
+                Right((head, tail))
+            }.biAggregate
+          next <- nextGroups
+            .groupBy(_._1)
+            .mapValues(_.map(_._2))
+            .toSeq
+            .flatMap {
+              case (sub, r) =>
+                value.apply(sub)
+                  .map {
+                    s => cleanup(s, r).map(r => (sub, r))
+                  }
+                  .toSeq
+            }
+            .biAggregate
 
-        val nextGroups = toDig
-          .flatMap {
-            case Nil =>
-              throw new RuntimeException(s"BUG: cleanup failed: $body, $toDig, $toRemove")
-            case head :: tail =>
-              Seq((head, tail))
-          }
+        } yield {
+          val leave = value.toMap.removedAll(nextGroups.map(_._1))
+          Json.fromFields((next ++ leave).toMap.removedAll(toRemove.map(_.head)))
+        }
 
-        val next = nextGroups
-          .groupBy(_._1)
-          .mapValues(_.map(_._2))
-          .toSeq
-          .flatMap {
-            case (sub, r) =>
-              value.apply(sub).map(s => (sub, cleanup(s, r))).toSeq
-          }
-
-        val leave = value.toMap.removedAll(nextGroups.map(_._1))
-
-        Json.fromFields((next ++ leave).toMap.removedAll(toRemove.map(_.head)))
       case None =>
-        body
+        Right(body)
     }
   }
 
@@ -77,7 +79,6 @@ class RestRequestHook[F[+ _, + _], RC]
         (v.path :+ v.field).map(_.name).toList
     }
 
-    val newbody = cleanup(c.body, removals)
 
     val newPath = value.extractor.pathSpec
       .map {
@@ -88,63 +89,69 @@ class RestRequestHook[F[+ _, + _], RC]
       }.biAggregate
 
 
-    val params = value.extractor.queryParameters.toSeq.map {
-      case (k, v) =>
-        val path = (v.path :+ v.field).map(_.name).toList
+    val params = value.extractor.queryParameters
+      .toSeq
+      .map {
+        case (k, v) =>
+          val path = (v.path :+ v.field).map(_.name).toList
 
-        val values = v.onWire match {
-          case IRTRestSpec.OnWireScalar(_) =>
-            for {
-              l <-extract(path, c.body)
-            } yield {
-              List(l)
-            }
-          case IRTRestSpec.OnWireGeneric(tpe) =>
-            tpe match {
-              case OnWireGenericType.Map(_, _) =>
-                val elements = extractMap(path, c.body)
-                for {
-                  m <- elements
-                } yield {
-                  List(m.map {
-                    case (k, v) =>
-                      s"${Escaping.escape(k)}=${Escaping.escape(v)}"
-                  }.mkString(","))
-                }
-
-              case OnWireGenericType.List(_, unpacked) =>
-                val elements = extractList(path, c.body)
-                if (unpacked) {
-                  elements
-                } else {
+          val values = v.onWire match {
+            case IRTRestSpec.OnWireScalar(_) =>
+              for {
+                l <- extract(path, c.body)
+              } yield {
+                List(l)
+              }
+            case IRTRestSpec.OnWireGeneric(tpe) =>
+              tpe match {
+                case OnWireGenericType.Map(_, _) =>
+                  val elements = extractMap(path, c.body)
                   for {
-                    l <- elements
+                    m <- elements
                   } yield {
-                    List(l.map(Escaping.escape).mkString(","))
+                    List(m.map {
+                      case (k, v) =>
+                        s"${Escaping.escape(k)}=${Escaping.escape(v)}"
+                    }.mkString(","))
                   }
 
-                }
-              case OnWireGenericType.Option(_) =>
-                for {
-                  l <- extractMaybe(path, c.body)
-                } yield {
-                  List(l.getOrElse(""))
-                }
-            }
-        }
+                case OnWireGenericType.List(_, unpacked) =>
+                  val elements = extractList(path, c.body)
+                  if (unpacked) {
+                    elements
+                  } else {
+                    for {
+                      l <- elements
+                    } yield {
+                      List(l.map(Escaping.escape).mkString(","))
+                    }
 
-        for {
-          v <- values
-        } yield {
-          (k.value, v)
-        }
-    }.toList.biAggregate.map(_.toMap)
+                  }
+                case OnWireGenericType.Option(_) =>
+                  for {
+                    l <- extractMaybe(path, c.body)
+                  } yield {
+                    List(l.getOrElse(""))
+                  }
+              }
+          }
+
+          for {
+            v <- values
+          } yield {
+            (k.value, v)
+          }
+      }
+      .toList
+      .biAggregate
+      .map(_.toMap)
 
     import scala.collection.JavaConverters._
 
     for {
       parameters <- params
       np <- newPath
+      newbody <- cleanup(c.body, removals)
     } yield {
       val url = new URI(
         c.target.getScheme,
@@ -170,50 +177,73 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
-  @tailrec
   private def extract(path: List[String], json: Json): Either[List[MappingError], String] = {
     path match {
       case Nil =>
         foldScalar(json)
       case head :: tail =>
-        extract(tail, json.asObject.get.apply(head).get)
+        for {
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
+          el <- obj.apply(head).toRight(List(MappingError.ElementExpected(head)))
+          v <- extract(tail, el)
+        } yield {
+          v
+        }
     }
   }
 
 
-  @tailrec
   private def extractMap(path: List[String], json: Json): Either[List[MappingError], Map[String, String]] = {
     path match {
       case Nil =>
-        json.asObject.get
-          .toMap
-          .toSeq
-          .map {
-            case (k, v) =>
+        for {
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
+          v <- obj.toMap
+            .toSeq
+            .map {
+              case (k, v) =>
 
-              foldScalar(v).map(j => (k, j))
-          }
-          .biAggregate
-          .map(_.toMap)
-
+                foldScalar(v).map(j => (k, j))
+            }
+            .biAggregate
+            .map(_.toMap)
+        } yield {
+          v
+        }
 
       case head :: tail =>
-        extractMap(tail, json.asObject.get.apply(head).get)
+        for {
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
+          el <- obj.apply(head).toRight(List(MappingError.ElementExpected(head)))
+          v <- extractMap(tail, el)
+        } yield {
+          v
+        }
+
     }
   }
 
-  @tailrec
   private def extractList(path: List[String], json: Json): Either[List[MappingError], List[String]] = {
     path match {
       case Nil =>
-        json.asArray.get.map(foldScalar).toList.biAggregate
+        for {
+          arr <- json.asArray.toRight(List(MappingError.ArrayExpected()))
+          v <- arr.map(foldScalar).toList.biAggregate
+        } yield {
+          v
+        }
 
       case head :: tail =>
-        extractList(tail, json.asObject.get.apply(head).get)
+        for {
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
+          el <- obj.apply(head).toRight(List(MappingError.ElementExpected(head)))
+          v <- extractList(tail, el)
+        } yield {
+          v
+        }
     }
   }
 
-  @tailrec
   private def extractMaybe(path: List[String], json: Json): Either[List[MappingError], Option[String]] = {
     path match {
       case Nil =>
@@ -223,11 +253,16 @@ class RestRequestHook[F[+ _, + _], RC]
           Some(value)
         }
       case head :: tail =>
-        json.asObject.get.apply(head) match {
-          case Some(value) =>
-            extractMaybe(tail, value)
-          case None =>
-            Right(None)
+        for {
+          obj <- json.asObject.toRight(List(MappingError.ObjectExpected()))
+          v <- obj.apply(head) match {
+            case Some(value) =>
+              extractMaybe(tail, value)
+            case None =>
+              Right(None)
+          }
+        } yield {
+          v
         }
     }
   }
@@ -252,6 +287,10 @@ object RestRequestHook {
 
   object MappingError {
 
+    case class ObjectExpected() extends MappingError
+    case class ArrayExpected() extends MappingError
+    case class ElementExpected(name: String) extends MappingError
+    case class UnexpectedEmptyRemoval(body: Json, removals: Seq[List[String]]) extends MappingError
     case class UnexpectedNonScalarEntity(json: Json) extends MappingError
 
   }
