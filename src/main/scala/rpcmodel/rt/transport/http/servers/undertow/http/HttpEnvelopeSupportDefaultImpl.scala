@@ -7,7 +7,10 @@ import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
 import rpcmodel.rt.transport.http.servers.undertow.MethodInput
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 
-class HttpEnvelopeSupportDefaultImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtractor) extends HttpEnvelopeSupport[F] {
+class HttpEnvelopeSupportDefaultImpl[F[+ _, + _] : BIO]
+(
+  idExtractor: MethodIdExtractor,
+) extends HttpEnvelopeSupport[F] {
   override def makeInput(context: HttpRequestContext): F[ServerTransportError, MethodInput] = {
     for {
       id <- F.fromEither(idExtractor.extract(context.exchange.getRelativePath))

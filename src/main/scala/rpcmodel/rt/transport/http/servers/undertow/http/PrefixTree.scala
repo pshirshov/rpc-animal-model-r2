@@ -47,6 +47,5 @@ object PrefixTree {
       .toMap
 
     PrefixTree(currentValues.map(_._2), next)
-
   }
 }

@@ -2,7 +2,7 @@ package rpcmodel.rt.transport.http.servers.undertow.ws
 
 import io.circe.{Json, Printer}
 import izumi.functional.bio.BIO._
-import izumi.functional.bio.{BIOAsync, BIOPrimitives, BIORunner, Entropy2}
+import izumi.functional.bio.{BIOAsync, BIOPrimitives, Entropy2}
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
@@ -12,13 +12,13 @@ import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncR
 import rpcmodel.rt.transport.http.servers.shared.{InvokationId, PollingConfig}
 
 case class IdentifiedRequestContext[RequestContext](
-                                             rc: RequestContext,
-                                             invokationId: InvokationId,
-                                             methodId: GeneratedServerBase.MethodId,
-                                             body: Json,
-                                           ) extends BaseClientContext[RequestContext]
+                                                     rc: RequestContext,
+                                                     invokationId: InvokationId,
+                                                     methodId: GeneratedServerBase.MethodId,
+                                                     body: Json,
+                                                   ) extends BaseClientContext[RequestContext]
 
-class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIORunner : BIOPrimitives, Meta, BzrRequestContext]
+class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOPrimitives, Meta, BzrRequestContext]
 (
   pollingConfig: PollingConfig,
   client: WsSessionBuzzer[F, Meta],
@@ -38,8 +38,8 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIORunner : BIOPrimitives, Meta
       envelope <- F.pure(hook.onRequest(IdentifiedRequestContext(requestContext, id, methodId, body), c => AsyncRequest(c.methodId, Map.empty, c.body, c.invokationId)))
       _ <- client.setPending(id)
       _ <- client.send(envelope.asJson.printWith(printer)).leftMap(e => ClientDispatcherError.UnknownException(e))
-      p <- BIOPrimitives[F].mkPromise[ClientDispatcherError, ClientResponse[Json]]
 
+      promise <- BIOPrimitives[F].mkPromise[ClientDispatcherError, ClientResponse[Json]]
       check = for {
         status <- client.takePending(id)
         _ <- status match {
@@ -47,41 +47,36 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIORunner : BIOPrimitives, Meta
             for {
               _ <- value.envelope match {
                 case s: AsyncResponse.AsyncSuccess =>
-                  p.succeed(ClientResponse(s.body))
+                  promise.succeed(ClientResponse(s.body))
                 case f: AsyncResponse.AsyncFailure =>
-                  p.fail(ClientDispatcherError.ServerError(f.error))
+                  promise.fail(ClientDispatcherError.ServerError(f.error))
               }
-            } yield {
-
-            }
+            } yield ()
 
           case None =>
             F.unit
         }
-        done <- p.poll
-        out <- (done match {
+        done <- promise.poll
+        out <- done match {
           case Some(value) =>
             value.map(f => Some(f))
 
           case None =>
-            F.pure(None)
-        }) : F[ClientDispatcherError, Option[ClientResponse[Json]]]
-      } yield {
-        out
-      }
-      result <- check.repeatUntil(ClientDispatcherError.TimeoutException(id, methodId), pollingConfig.sleep, pollingConfig.maxAttempts)
-    } yield {
-      result
-    }
-
+            F.pure(None): F[ClientDispatcherError, Option[ClientResponse[Json]]]
+        }
+      } yield out
+      result <- check.repeatUntil(
+        onTimeout = ClientDispatcherError.TimeoutException(id, methodId),
+        sleep = pollingConfig.sleep,
+        maxAttempts = pollingConfig.maxAttempts,
+      )
+    } yield result
 
     for {
       id <- random.nextTimeUUID()
       iid = InvokationId(id.toString)
       result <- work(iid).guarantee(client.dropPending(iid))
-    } yield {
-      result
-    }
+    } yield result
   }
 }
 

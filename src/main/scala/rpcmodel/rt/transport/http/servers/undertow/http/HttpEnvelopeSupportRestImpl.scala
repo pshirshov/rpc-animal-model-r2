@@ -4,7 +4,7 @@ import io.circe.Json
 import izumi.functional.bio.BIO
 import izumi.functional.bio.BIO._
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
+import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.clients.ahc.Escaping
 import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
@@ -16,8 +16,11 @@ import rpcmodel.rt.transport.rest.RestSpec.OnWireGenericType
 
 import scala.annotation.tailrec
 
-
-class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtractor, dispatchers: Seq[GeneratedServerBaseImpl[F, _, Json]]) extends HttpEnvelopeSupport[F] {
+class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO]
+(
+  idExtractor: MethodIdExtractor,
+  dispatchers: Seq[GeneratedServerBase[F, _, Json]],
+) extends HttpEnvelopeSupport[F] {
 
   lazy val prefixes: PrefixTree[String, (MethodId, IRTRestSpec)] = {
     val allMethods = dispatchers.flatMap(_.specs.toSeq)
@@ -168,7 +171,7 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO](idExtractor: MethodIdExtrac
 
   def flatten[T](values: Seq[Option[T]]): Option[Seq[T]] = {
     if (values.forall(_.isDefined)) {
-      Some(values.collect({case Some(v) => v}))
+      Some(values.collect({ case Some(v) => v }))
     } else {
       None
     }

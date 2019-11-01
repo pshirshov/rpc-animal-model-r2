@@ -11,8 +11,8 @@ import io.undertow.util.{Headers, HttpString, Methods}
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.ContextProvider
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, ResponseKind, ServerWireResponse}
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBaseImpl
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError.ShortException
@@ -33,10 +33,9 @@ case class HttpBody(json: Json, bytes: Option[Array[Byte]])
 
 case class MethodInput(json: Json, methodId: MethodId)
 
-
 class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, +DomainErrors >: Nothing]
 (
-  override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, C, Json]],
+  override protected val dispatchers: Seq[GeneratedServerBase[F, C, Json]],
   override protected val serverContextProvider: ContextProvider[F, ServerTransportError, HttpRequestContext, C],
   printer: Printer,
   extractor: HttpEnvelopeSupport[F],
@@ -109,8 +108,7 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, +DomainErrors >: 
         }
       }
       _ <- F.sync(exchange.endExchange())
-    } yield {
-    }
+    } yield ()
 
     exchange.dispatch(new Runnable {
       override def run(): Unit = {
@@ -135,7 +133,6 @@ class HttpServerHandler[F[+ _, + _] : BIOAsync : BIORunner, C, +DomainErrors >: 
     }
   }
 }
-
 
 object HttpServerHandler {
   final val responseTypeHeader = HttpString.tryFromString("X-Response-Type")

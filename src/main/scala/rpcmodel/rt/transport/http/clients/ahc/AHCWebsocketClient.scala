@@ -11,8 +11,8 @@ import izumi.functional.bio.{BIOAsync, BIOPrimitives, BIORunner, Entropy2}
 import org.asynchttpclient.AsyncHttpClient
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
+import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
-import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
 import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
@@ -21,13 +21,12 @@ import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler
 import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler.Context.WebsocketClientSession
 import rpcmodel.rt.transport.http.servers.undertow.ws.IdentifiedRequestContext
 
-
 class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsClientRequestContext, BuzzerRequestContext, +DomainErrors >: Nothing]
 (
   client: AsyncHttpClient,
   target: URI,
   pollingConfig: PollingConfig,
-  buzzerDispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = Seq.empty,
+  buzzerDispatchers: Seq[GeneratedServerBase[F, BuzzerRequestContext, Json]],
   buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
   hook: ClientRequestHook[IdentifiedRequestContext, WsClientRequestContext, AsyncRequest],
   handler: TransportErrorHandler[DomainErrors, AsyncRequest],
@@ -40,8 +39,9 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
 
   import io.circe.syntax._
 
+  override protected def bioAsync: BIOAsync[F] = implicitly
   override protected val serverContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext] = buzzerContextProvider
-  override protected val dispatchers: Seq[GeneratedServerBaseImpl[F, BuzzerRequestContext, Json]] = buzzerDispatchers
+  override protected val dispatchers: Seq[GeneratedServerBase[F, BuzzerRequestContext, Json]] = buzzerDispatchers
 
   private val pending = new ConcurrentHashMap[InvokationId, Option[AsyncResponse]]()
   private val session = new AHCWsClientSession(client, target, this)
@@ -49,10 +49,8 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
   def connect(): F[ClientDispatcherError, Unit] = {
     for {
       _ <- F.sync(session.get())
-    } yield {
-    }
+    } yield ()
   }
-
 
   override def disconnect(): F[ClientDispatcherError, Unit] = {
     F.async {
@@ -88,45 +86,37 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
           ()
       }
 
-      p <- BIOPrimitives[F].mkPromise[ClientDispatcherError, ClientResponse[Json]]
+      check <- for {
+        promise <- BIOPrimitives[F].mkPromise[ClientDispatcherError, ClientResponse[Json]]
+        check = for {
+          status <- F.sync(pending.get(iid))
+          _ <- status match {
+            case Some(value) =>
+              for {
+                _ <- value match {
+                  case s: AsyncSuccess =>
+                    promise.succeed(ClientResponse(s.body))
+                  case f: AsyncFailure =>
+                    promise.fail(ClientDispatcherError.ServerError(f.error))
+                }
+              } yield ()
 
-      check = for {
-        status <- F.sync(pending.get(iid))
-        _ <- status match {
-          case Some(value) =>
-            for {
-              _ <- value match {
-                case s: AsyncSuccess =>
-                  p.succeed(ClientResponse(s.body))
-                case f: AsyncFailure =>
-                  p.fail(ClientDispatcherError.ServerError(f.error))
-              }
-            } yield {
-
-            }
-
-          case None =>
-            F.unit
-        }
-        done <- p.poll
-        out <- (done match {
-          case Some(value) =>
-            value.map(f => Some(f))
-
-          case None =>
-            F.pure(None)
-        }) : F[ClientDispatcherError, Option[ClientResponse[Json]]]
-      } yield {
-        out
-      }
+            case None =>
+              F.unit
+          }
+          done <- promise.poll
+          out <- done match {
+            case Some(value) =>
+              value.map(Some(_))
+            case None =>
+              F.pure(None): F[ClientDispatcherError, Option[ClientResponse[Json]]]
+          }
+        } yield out
+      } yield check
 
       out <- check.repeatUntil(ClientDispatcherError.TimeoutException(iid, methodId), pollingConfig.sleep, pollingConfig.maxAttempts)
-    } yield {
-      out
-    }
+    } yield out
   }
-
-  override protected def bioAsync: BIOAsync[F] = implicitly
 
   override def onTextMessage(payload: String): Unit = {
     parse(payload) match {
@@ -155,9 +145,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
       resp <- doCall.sandbox.leftMap(_.toEither)
         .redeemPure[AsyncResponse](f => AsyncFailure(Map.empty, handler.toRemote(data)(f), Some(data.id)), s => s)
       _ <- F.sync(conn.sendTextFrame(resp.asJson.printWith(printer)))
-    } yield {
-
-    }
+    } yield ()
 
     BIORunner[F].unsafeRunAsyncAsEither(work)(errHandler.handle(RuntimeErrorHandler.Context.WebsocketClientSession()))
   }
@@ -171,7 +159,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
         pending.put(InvokationId(maybeId.id.take(127)), Some(data))
       }
       result match {
-        case Right(_)  =>
+        case Right(_) =>
         case Left(err) =>
           errHandler.onDomain(WebsocketClientSession(), err)
       }

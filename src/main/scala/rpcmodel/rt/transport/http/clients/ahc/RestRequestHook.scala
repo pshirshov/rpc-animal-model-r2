@@ -9,9 +9,10 @@ import rpcmodel.rt.transport.rest.IRTRestSpec
 import rpcmodel.rt.transport.rest.IRTRestSpec.IRTPathSegment
 import rpcmodel.rt.transport.rest.RestSpec.{HttpMethod, OnWireGenericType}
 
+import scala.annotation.tailrec
+
 object Escaping {
   @inline final def escape(s: String): String = URLEncoder.encode(s, "UTF-8")
-
   @inline final def unescape(s: String): String = URLDecoder.decode(s, "UTF-8")
 }
 
@@ -30,7 +31,6 @@ class RestRequestHook[F[+ _, + _], RC]
             t.printStackTrace()
             throw t
         }
-
 
       case None =>
         request(c)
@@ -84,7 +84,6 @@ class RestRequestHook[F[+ _, + _], RC]
           extract((path :+ field).map(_.name).toList, c.body)
       }
 
-
     val url = new URI(
       c.target.getScheme,
       c.target.getUserInfo,
@@ -123,7 +122,6 @@ class RestRequestHook[F[+ _, + _], RC]
             }
         }
 
-
         (k.value, values)
     }
 
@@ -140,10 +138,9 @@ class RestRequestHook[F[+ _, + _], RC]
         base.setBody(c.printer.print(newbody))
     }
 
-
   }
 
-  @scala.annotation.tailrec
+  @tailrec
   private def extract(path: List[String], json: Json): String = {
     path match {
       case Nil =>
@@ -153,7 +150,7 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
-  @scala.annotation.tailrec
+  @tailrec
   private def extractMap(path: List[String], json: Json): Map[String, String] = {
     path match {
       case Nil =>
@@ -164,7 +161,7 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
-  @scala.annotation.tailrec
+  @tailrec
   private def extractList(path: List[String], json: Json): List[String] = {
     path match {
       case Nil =>
@@ -175,7 +172,7 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
-  @scala.annotation.tailrec
+  @tailrec
   private def extractMaybe(path: List[String], json: Json): Option[String] = {
     path match {
       case Nil =>

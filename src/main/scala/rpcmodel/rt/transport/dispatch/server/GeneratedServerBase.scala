@@ -7,18 +7,14 @@ import rpcmodel.rt.transport.errors.ServerDispatcherError.{MethodHandlerMissing,
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerDispatcherError}
 import rpcmodel.rt.transport.rest.IRTRestSpec
 
-
-trait GeneratedServerBase[F[_, _], C, WValue] extends ServerContext[F, C, WValue] {
+trait GeneratedServerBase[+F[_, _], -C, WValue] extends ServerContext[F, C, WValue] {
   def id: ServiceName
   def methods: Map[MethodId, Req => F[ServerDispatcherError, Res]]
   def specs: Map[MethodId, IRTRestSpec]
   def dispatch(methodId: MethodId, r: Req): F[ServerDispatcherError, ServerWireResponse[WValue]]
 }
 
-abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue]
-(
-
-) extends GeneratedServerBase[F, C, WValue] {
+abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue] extends GeneratedServerBase[F, C, WValue] {
 
   import BIO._
 
@@ -37,12 +33,12 @@ abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue]
   }
 
   protected final def doEncode[ResBody: IRTCodec[*, WValue], ReqBody: IRTCodec[*, WValue]]
-  (
-    r: Req,
-    reqBody: ReqBody,
-    resBody: ResBody,
-    kind: ResponseKind,
-  ): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
+    (
+      r: Req,
+      reqBody: ReqBody,
+      resBody: ResBody,
+      kind: ResponseKind,
+    ): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
     val codec = implicitly[IRTCodec[ResBody, WValue]]
     for {
       out <- F.pure(codec.encode(resBody))
@@ -52,12 +48,11 @@ abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue]
   }
 }
 
-
 object GeneratedServerBase {
 
-  case class ClientResponse[WValue](value: WValue)
+  case class ClientResponse[+WValue](value: WValue)
 
-  case class ServerWireRequest[WCtxIn, WValue](c: WCtxIn, value: WValue)
+  case class ServerWireRequest[+WCtxIn, +WValue](c: WCtxIn, value: WValue)
 
   sealed trait ResponseKind
   object ResponseKind {
@@ -65,14 +60,12 @@ object GeneratedServerBase {
     object RpcSuccess extends ResponseKind
     object RpcFailure extends ResponseKind
   }
-  case class ServerWireResponse[WValue](value: WValue, kind: ResponseKind)
+  case class ServerWireResponse[+WValue](value: WValue, kind: ResponseKind)
 
   case class ClientDispatcherException(error: ClientDispatcherError) extends RuntimeException
 
   case class MethodName(name: String) extends AnyVal
-
   case class ServiceName(name: String) extends AnyVal
-
   case class MethodId(service: ServiceName, method: MethodName)
 
 }

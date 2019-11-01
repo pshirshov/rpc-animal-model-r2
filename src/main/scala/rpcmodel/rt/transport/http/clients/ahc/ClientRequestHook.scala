@@ -1,19 +1,24 @@
 package rpcmodel.rt.transport.http.clients.ahc
 
-trait ClientRequestHook[F[_], C, O] {
-  def onRequest(c: F[C], request: F[C] => O): O
+trait ClientRequestHook[K[_], W, O] {
+  def onRequest(c: K[W], request: K[W] => O): O
 }
 
 object ClientRequestHook {
-//  type Simple[C, O] = ClientRequestHook[SimpleRequestContext, C, O]
+  def passthrough[W, K[_], T]: ClientRequestHook[K, W, T] = forCtx[W, K].passthrough[T]
 
-  class Aux[W, K[_] <: BaseClientContext[_]] {
+  def forCtx[W, K[_]]: ForCtxPartiallyApplied[W, K] = new ForCtxPartiallyApplied[W, K]
+  def forCtx[W]: ForCtx2PartiallyApplied[W] = new ForCtx2PartiallyApplied[W]
+
+  final class ForCtxPartiallyApplied[W, K[_]](private val dummy: Boolean = false) extends AnyVal {
     def passthrough[T]: ClientRequestHook[K, W, T] = {
       (c: K[W], request: K[W] => T) => request(c)
     }
   }
 
-//  def forCtx[W]: Aux[W, SimpleRequestContext] = new Aux[W, SimpleRequestContext]
-
-  def forCtx[W, K[_] <: BaseClientContext[_]]: Aux[W, K] = new Aux[W, K]
+  final class ForCtx2PartiallyApplied[W](private val dummy: Int = 0) extends AnyVal {
+    def passthrough[K[_], T]: ClientRequestHook[K, W, T] = {
+      (c: K[W], request: K[W] => T) => request(c)
+    }
+  }
 }
