@@ -5,10 +5,12 @@ import izumi.functional.bio.BIO
 import izumi.functional.bio.BIO._
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
 import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
+import rpcmodel.rt.transport.errors.ClientDispatcherError.RestMappingError
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.clients.ahc.Escaping
 import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
-import rpcmodel.rt.transport.http.servers.undertow.MethodInput
+import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler.Context.RestMappingSupport
+import rpcmodel.rt.transport.http.servers.undertow.{MethodInput, RuntimeErrorHandler}
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.rest.IRTRestSpec
 import rpcmodel.rt.transport.rest.IRTRestSpec.{IRTBasicField, IRTPathSegment, IRTQueryParameterSpec, IRTType}
@@ -20,6 +22,7 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO]
 (
   idExtractor: MethodIdExtractor,
   dispatchers: Seq[GeneratedServerBase[F, _, Json]],
+  errHandler: RuntimeErrorHandler[Nothing],
 ) extends HttpEnvelopeSupport[F] {
 
   lazy val prefixes: PrefixTree[String, (MethodId, IRTRestSpec)] = {
@@ -207,7 +210,8 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO]
           Json.fromDouble(java.lang.Double.parseDouble(value))
       }
     } catch {
-      case _: Throwable =>
+      case t: Throwable =>
+        errHandler.onInfo(RestMappingSupport(), List(t))
         None
     }
   }

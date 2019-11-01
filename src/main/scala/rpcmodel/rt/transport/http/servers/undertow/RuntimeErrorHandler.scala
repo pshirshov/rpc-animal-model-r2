@@ -7,6 +7,7 @@ import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsConnection
 
 trait RuntimeErrorHandler[-T] {
   def onCritical(context: RuntimeErrorHandler.Context, value: List[Throwable]): Unit = {}
+  def onInfo(context: RuntimeErrorHandler.Context, value: List[Throwable]): Unit = {}
   def onDomain(context: RuntimeErrorHandler.Context, value: T): Unit = {}
 
   final def handle(context: RuntimeErrorHandler.Context)(f: BIOExit[T, _]): Unit = {
@@ -32,6 +33,11 @@ object RuntimeErrorHandler {
       value.foreach(_.printStackTrace())
     }
 
+    override def onInfo(context: Context, value: List[Throwable]): Unit = {
+      System.err.println(s"Unhandled issue in $context")
+      value.foreach(_.printStackTrace())
+    }
+
     override def onDomain(context: Context, value: Any): Unit = {
       System.err.println(s"Unhandled error in $context: $value")
     }
@@ -41,6 +47,7 @@ object RuntimeErrorHandler {
   object Context {
     case class WebsocketServerSession(ctx: WsConnection, message: BufferedTextMessage) extends Context
     case class WebsocketClientSession() extends Context
+    case class RestMappingSupport() extends Context
     case class HttpRequest(exchange: HttpServerExchange) extends Context
   }
 }
