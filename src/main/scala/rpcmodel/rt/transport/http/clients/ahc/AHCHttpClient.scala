@@ -37,7 +37,7 @@ class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
   client: AsyncHttpClient,
   target: URI,
   printer: Printer,
-  hook: ClientRequestHook[AHCClientContext, RequestContext, BoundRequestBuilder],
+  hook: ClientRequestHook[AHCClientContext[RequestContext], BoundRequestBuilder],
 ) extends ClientTransport[F, RequestContext, Json] {
 
   override def connect(): F[ClientDispatcherError, Unit] = F.unit
@@ -48,7 +48,7 @@ class AHCHttpClient[F[+ _, + _] : BIOAsync, RequestContext]
     import io.circe.parser._
 
     for {
-      req <- F.pure(hook.onRequest(AHCClientContext(c, printer, target, client, methodId, body), c => prepare(c.methodId, c.body)))
+      req <- F.fromEither(hook.onRequest(AHCClientContext(c, printer, target, client, methodId, body), c => prepare(c.methodId, c.body)))
       resp <- F.async[ClientDispatcherError, Response] {
         f =>
 

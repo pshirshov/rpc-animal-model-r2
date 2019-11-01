@@ -9,7 +9,6 @@ case class PrefixTree[K, V](values: Seq[V], children: Map[PathElement[K], Prefix
       case Nil =>
         Seq(this)
       case head :: tail =>
-
         val exact = children.get(PathElement.Value(head))
         val wildcard = children.get(PathElement.Wildcard)
         (exact.toSeq ++ wildcard.toSeq).flatMap(_.findSubtrees(tail))

@@ -43,7 +43,7 @@ final case class IRTBuilder[F[+ _, + _], -RequestContext, -DomainErrors >: Nothi
     Ctx <: RequestContext,
   ](
      target: String,
-     hook: ClientRequestHook[AHCClientContext, Ctx, BoundRequestBuilder],
+     hook: ClientRequestHook[AHCClientContext[Ctx], BoundRequestBuilder],
    ): AHCHttpClient[F2, Ctx] = {
     val client = this.client.getOrElse(asyncHttpClient())
 
@@ -88,7 +88,7 @@ final case class IRTBuilder[F[+ _, + _], -RequestContext, -DomainErrors >: Nothi
   ](
      target: String,
      buzzerContextProvider: ContextProvider[F2, ServerTransportError, AsyncRequest, Ctx],
-     hook: ClientRequestHook[IdentifiedRequestContext, WsClientRequestContext, AsyncRequest],
+     hook: ClientRequestHook[IdentifiedRequestContext[WsClientRequestContext], AsyncRequest],
      errHandler: Option[RuntimeErrorHandler[ServerTransportError]] = None,
      handler: Option[TransportErrorHandler[Err, AsyncRequest]] = None,
    ): AHCWebsocketClient[F2, WsClientRequestContext, Ctx, Err] = {
@@ -148,7 +148,7 @@ final case class IRTBuilder[F[+ _, + _], -RequestContext, -DomainErrors >: Nothi
     Ctx <: RequestContext
   ](
      client: WsSessionBuzzer[F2, Meta],
-     hook: ClientRequestHook[IdentifiedRequestContext, Ctx, AsyncRequest],
+     hook: ClientRequestHook[IdentifiedRequestContext[Ctx], AsyncRequest],
    ): WsBuzzerTransport[F2, Meta, Ctx] = {
     val entropy = Entropy.fromImpure(this.entropy.getOrElse(Entropy.Standard))
 

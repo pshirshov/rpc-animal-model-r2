@@ -14,7 +14,7 @@ import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
 import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupportRestImpl
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext
-import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionMetaProvider}
+import rpcmodel.rt.transport.http.servers.undertow.ws.{IdentifiedRequestContext, SessionManager, SessionMetaProvider}
 import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
 import rpcmodel.user.impl.CalcServerImpl
 import zio._
@@ -123,7 +123,7 @@ class FullTest extends WordSpec {
 
             val clients = b.map {
               b =>
-                val buzzertransport = IRTBuilder().makeWsBuzzerTransport(b, ClientRequestHook.forCtx[OutgoingPushServerCtx].passthrough)
+                val buzzertransport = IRTBuilder().makeWsBuzzerTransport(b, ClientRequestHook.forCtx[IdentifiedRequestContext[OutgoingPushServerCtx]].passthrough)
 
                 new GeneratedCalcClientDispatcher(
                   codecs,
@@ -152,7 +152,7 @@ class FullTest extends WordSpec {
       val specs = dispatchers[Nothing].flatMap(d => d.specs.toSeq).toMap
       new RestRequestHook[IO, C2SOutgoingCtx](specs)
     } else {
-      ClientRequestHook.forCtx[C2SOutgoingCtx, AHCClientContext].passthrough[BoundRequestBuilder]
+      ClientRequestHook.forCtx[AHCClientContext[C2SOutgoingCtx]].passthrough[BoundRequestBuilder]
     }
 
     new GeneratedCalcClientDispatcher(
@@ -165,7 +165,7 @@ class FullTest extends WordSpec {
     val transport = IRTBuilder(dispatchers[IncomingPushClientCtx]).makeWsClient(
       target = "ws://localhost:8080/ws",
       buzzerContextProvider = ContextProvider.forF[IO].const(IncomingPushClientCtx()),
-      hook = ClientRequestHook.forCtx[C2SOutgoingCtx].passthrough
+      hook = ClientRequestHook.forCtx[IdentifiedRequestContext[C2SOutgoingCtx]].passthrough
     )
 
     new GeneratedCalcClientDispatcher(codecs, transport)

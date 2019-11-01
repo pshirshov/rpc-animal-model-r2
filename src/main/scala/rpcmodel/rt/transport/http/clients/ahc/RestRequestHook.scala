@@ -5,35 +5,36 @@ import java.net.{URI, URLDecoder, URLEncoder}
 import io.circe.Json
 import org.asynchttpclient.BoundRequestBuilder
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
+import rpcmodel.rt.transport.http.clients.ahc.RestRequestHook.MappingError
 import rpcmodel.rt.transport.rest.IRTRestSpec
 import rpcmodel.rt.transport.rest.IRTRestSpec.IRTPathSegment
 import rpcmodel.rt.transport.rest.RestSpec.{HttpMethod, OnWireGenericType}
+import rpcmodel.rt.transport.IzEither._
+import rpcmodel.rt.transport.errors.ClientDispatcherError
 
 import scala.annotation.tailrec
 
 object Escaping {
   @inline final def escape(s: String): String = URLEncoder.encode(s, "UTF-8")
+
   @inline final def unescape(s: String): String = URLDecoder.decode(s, "UTF-8")
 }
 
 class RestRequestHook[F[+ _, + _], RC]
 (
   methods: Map[MethodId, IRTRestSpec],
-) extends ClientRequestHook[AHCClientContext, RC, BoundRequestBuilder] {
+) extends ClientRequestHook[AHCClientContext[RC], BoundRequestBuilder] {
 
-  override def onRequest(c: AHCClientContext[RC], request: AHCClientContext[RC] => BoundRequestBuilder): BoundRequestBuilder = {
+  override def onRequest(c: AHCClientContext[RC], request: AHCClientContext[RC] => BoundRequestBuilder): Either[ClientDispatcherError , BoundRequestBuilder] = {
     methods.get(c.methodId) match {
       case Some(value) =>
-        try {
-          processRest(c, value)
-        } catch {
-          case t: Throwable =>
-            t.printStackTrace()
-            throw t
-        }
+        val out = processRest(c, value).left.map(e => ClientDispatcherError.RestMappingError(e))
+        println(out)
+        out
+
 
       case None =>
-        request(c)
+        Right(request(c))
     }
   }
 
@@ -43,9 +44,11 @@ class RestRequestHook[F[+ _, + _], RC]
         val (toRemove, toDig) = removals.partition(_.size == 1)
 
         val nextGroups = toDig
-          .map {
+          .flatMap {
+            case Nil =>
+              throw new RuntimeException(s"BUG: cleanup failed: $body, $toDig, $toRemove")
             case head :: tail =>
-              (head, tail)
+              Seq((head, tail))
           }
 
         val next = nextGroups
@@ -65,7 +68,7 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
-  private def processRest(c: AHCClientContext[RC], value: IRTRestSpec): BoundRequestBuilder = {
+  private def processRest(c: AHCClientContext[RC], value: IRTRestSpec): Either[List[MappingError], BoundRequestBuilder] = {
     val removals = value.extractor.pathSpec.collect {
       case IRTPathSegment.Parameter(field, path, _) =>
         (path :+ field).map(_.name).toList
@@ -79,69 +82,96 @@ class RestRequestHook[F[+ _, + _], RC]
     val newPath = value.extractor.pathSpec
       .map {
         case IRTPathSegment.Word(value) =>
-          value
+          Right(value)
         case IRTPathSegment.Parameter(field, path, _) =>
           extract((path :+ field).map(_.name).toList, c.body)
-      }
+      }.biAggregate
 
-    val url = new URI(
-      c.target.getScheme,
-      c.target.getUserInfo,
-      c.target.getHost,
-      c.target.getPort,
-      c.target.getPath + newPath.mkString("/"),
-      c.target.getQuery,
-      c.target.getFragment
-    )
 
-    val params: Map[String, List[String]] = value.extractor.queryParameters.map {
+    val params = value.extractor.queryParameters.toSeq.map {
       case (k, v) =>
         val path = (v.path :+ v.field).map(_.name).toList
 
         val values = v.onWire match {
           case IRTRestSpec.OnWireScalar(_) =>
-            List(extract(path, c.body))
+            for {
+              l <-extract(path, c.body)
+            } yield {
+              List(l)
+            }
           case IRTRestSpec.OnWireGeneric(tpe) =>
             tpe match {
               case OnWireGenericType.Map(_, _) =>
                 val elements = extractMap(path, c.body)
-                List(elements.map {
-                  case (k, v) =>
-                    s"${Escaping.escape(k)}=${Escaping.escape(v)}"
-                }.mkString(","))
+                for {
+                  m <- elements
+                } yield {
+                  List(m.map {
+                    case (k, v) =>
+                      s"${Escaping.escape(k)}=${Escaping.escape(v)}"
+                  }.mkString(","))
+                }
 
               case OnWireGenericType.List(_, unpacked) =>
                 val elements = extractList(path, c.body)
                 if (unpacked) {
                   elements
                 } else {
-                  List(elements.map(Escaping.escape).mkString(","))
+                  for {
+                    l <- elements
+                  } yield {
+                    List(l.map(Escaping.escape).mkString(","))
+                  }
+
                 }
               case OnWireGenericType.Option(_) =>
-                List(extractMaybe(path, c.body).getOrElse(""))
+                for {
+                  l <- extractMaybe(path, c.body)
+                } yield {
+                  List(l.getOrElse(""))
+                }
             }
         }
 
-        (k.value, values)
-    }
+        for {
+          v <- values
+        } yield {
+          (k.value, v)
+        }
+    }.toList.biAggregate.map(_.toMap)
 
     import scala.collection.JavaConverters._
 
-    println(s"transformed: ${c.body} => ${value.method.name}, $newPath, $params, $newbody")
-    val base = c.client.prepare(value.method.name.toUpperCase, url.toString)
-      .setQueryParams(params.mapValues(_.asJava).toMap.asJava)
+    for {
+      parameters <- params
+      np <- newPath
+    } yield {
+      val url = new URI(
+        c.target.getScheme,
+        c.target.getUserInfo,
+        c.target.getHost,
+        c.target.getPort,
+        c.target.getPath + np.mkString("/"),
+        c.target.getQuery,
+        c.target.getFragment
+      )
 
-    value.method match {
-      case HttpMethod.Get =>
-        base
-      case _ =>
-        base.setBody(c.printer.print(newbody))
+
+      println(s"transformed: ${c.body} => ${value.method.name}, $newPath, $params, $newbody")
+      val base = c.client.prepare(value.method.name.toUpperCase, url.toString)
+        .setQueryParams(parameters.mapValues(_.asJava).toMap.asJava)
+
+      value.method match {
+        case HttpMethod.Get =>
+          base
+        case _ =>
+          base.setBody(c.printer.print(newbody))
+      }
     }
-
   }
 
   @tailrec
-  private def extract(path: List[String], json: Json): String = {
+  private def extract(path: List[String], json: Json): Either[List[MappingError], String] = {
     path match {
       case Nil =>
         foldScalar(json)
@@ -150,11 +180,22 @@ class RestRequestHook[F[+ _, + _], RC]
     }
   }
 
+
   @tailrec
-  private def extractMap(path: List[String], json: Json): Map[String, String] = {
+  private def extractMap(path: List[String], json: Json): Either[List[MappingError], Map[String, String]] = {
     path match {
       case Nil =>
-        json.asObject.get.toMap.mapValues(foldScalar).toMap
+        json.asObject.get
+          .toMap
+          .toSeq
+          .map {
+            case (k, v) =>
+
+              foldScalar(v).map(j => (k, j))
+          }
+          .biAggregate
+          .map(_.toMap)
+
 
       case head :: tail =>
         extractMap(tail, json.asObject.get.apply(head).get)
@@ -162,10 +203,10 @@ class RestRequestHook[F[+ _, + _], RC]
   }
 
   @tailrec
-  private def extractList(path: List[String], json: Json): List[String] = {
+  private def extractList(path: List[String], json: Json): Either[List[MappingError], List[String]] = {
     path match {
       case Nil =>
-        json.asArray.get.map(foldScalar).toList
+        json.asArray.get.map(foldScalar).toList.biAggregate
 
       case head :: tail =>
         extractList(tail, json.asObject.get.apply(head).get)
@@ -173,28 +214,46 @@ class RestRequestHook[F[+ _, + _], RC]
   }
 
   @tailrec
-  private def extractMaybe(path: List[String], json: Json): Option[String] = {
+  private def extractMaybe(path: List[String], json: Json): Either[List[MappingError], Option[String]] = {
     path match {
       case Nil =>
-        Some(foldScalar(json))
+        for {
+          value <- foldScalar(json)
+        } yield {
+          Some(value)
+        }
       case head :: tail =>
         json.asObject.get.apply(head) match {
           case Some(value) =>
             extractMaybe(tail, value)
           case None =>
-            None
+            Right(None)
         }
     }
   }
 
-  private def foldScalar(json: Json) = {
+  private def foldScalar(json: Json): Either[List[MappingError], String] = {
+    def onError = Left(List(MappingError.UnexpectedNonScalarEntity(json)))
+
     json.fold(
-      ???,
-      b => b.toString,
-      n => n.toString,
-      s => s,
-      a => ???,
-      o => ???,
+      onError,
+      b => Right(b.toString),
+      n => Right(n.toString),
+      s => Right(s),
+      _ => onError,
+      _ => onError,
     )
   }
+}
+
+object RestRequestHook {
+
+  sealed trait MappingError
+
+  object MappingError {
+
+    case class UnexpectedNonScalarEntity(json: Json) extends MappingError
+
+  }
+
 }

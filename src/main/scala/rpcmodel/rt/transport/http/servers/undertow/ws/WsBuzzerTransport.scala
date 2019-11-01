@@ -22,7 +22,7 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOPrimitives, Meta, BzrRequest
 (
   pollingConfig: PollingConfig,
   client: WsSessionBuzzer[F, Meta],
-  hook: ClientRequestHook[IdentifiedRequestContext, BzrRequestContext, AsyncRequest],
+  hook: ClientRequestHook[IdentifiedRequestContext[BzrRequestContext], AsyncRequest],
   printer: Printer,
   random: Entropy2[F],
 ) extends ClientTransport[F, BzrRequestContext, Json] {
@@ -35,7 +35,7 @@ class WsBuzzerTransport[F[+ _, + _] : BIOAsync : BIOPrimitives, Meta, BzrRequest
 
   override def dispatch(requestContext: BzrRequestContext, methodId: GeneratedServerBase.MethodId, body: Json): F[ClientDispatcherError, ClientResponse[Json]] = {
     def work(id: InvokationId): F[ClientDispatcherError, ClientResponse[Json]] = for {
-      envelope <- F.pure(hook.onRequest(IdentifiedRequestContext(requestContext, id, methodId, body), c => AsyncRequest(c.methodId, Map.empty, c.body, c.invokationId)))
+      envelope <- F.fromEither(hook.onRequest(IdentifiedRequestContext(requestContext, id, methodId, body), c => AsyncRequest(c.methodId, Map.empty, c.body, c.invokationId)))
       _ <- client.setPending(id)
       _ <- client.send(envelope.asJson.printWith(printer)).leftMap(e => ClientDispatcherError.UnknownException(e))
 

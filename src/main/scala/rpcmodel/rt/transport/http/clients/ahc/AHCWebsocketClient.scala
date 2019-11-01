@@ -28,7 +28,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
   pollingConfig: PollingConfig,
   buzzerDispatchers: Seq[GeneratedServerBase[F, BuzzerRequestContext, Json]],
   buzzerContextProvider: ContextProvider[F, ServerTransportError, AsyncRequest, BuzzerRequestContext],
-  hook: ClientRequestHook[IdentifiedRequestContext, WsClientRequestContext, AsyncRequest],
+  hook: ClientRequestHook[IdentifiedRequestContext[WsClientRequestContext], AsyncRequest],
   handler: TransportErrorHandler[DomainErrors, AsyncRequest],
   errHandler: RuntimeErrorHandler[ServerTransportError],
   printer: Printer,
@@ -71,7 +71,7 @@ class AHCWebsocketClient[F[+ _, + _] : BIOAsync : BIOPrimitives : BIORunner, WsC
       s <- F.sync(session.get())
       id <- random.nextTimeUUID()
       iid = InvokationId(id.toString)
-      envelope = hook.onRequest(IdentifiedRequestContext(c, iid, methodId, body), c => AsyncRequest(c.methodId, Map.empty, c.body, c.invokationId))
+      envelope <- F.fromEither(hook.onRequest(IdentifiedRequestContext(c, iid, methodId, body), c => AsyncRequest(c.methodId, Map.empty, c.body, c.invokationId)))
       _ <- F.sync(pending.put(iid, None))
       _ <- F.async[ClientDispatcherError, Unit] {
         f =>
