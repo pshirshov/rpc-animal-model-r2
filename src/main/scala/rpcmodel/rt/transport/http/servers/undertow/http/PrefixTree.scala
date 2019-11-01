@@ -1,26 +1,18 @@
 package rpcmodel.rt.transport.http.servers.undertow.http
 
-case class PrefixTree[K, V](values: Seq[V], children: Map[K, PrefixTree[K, V]]) {
-  def findSubtree(prefix: List[K]): Option[PrefixTree[K, V]] = {
-    prefix match {
-      case Nil =>
-        Some(this)
-      case head :: tail =>
-        children.get(head).map(_.findSubtreeOrRoot(tail))
-    }
-  }
+import rpcmodel.rt.transport.http.servers.undertow.http.PrefixTree.PathElement
 
-  def findSubtreeOrRoot(prefix: List[K]): PrefixTree[K, V] = {
+
+case class PrefixTree[K, V](values: Seq[V], children: Map[PathElement[K], PrefixTree[K, V]]) {
+  def findSubtrees(prefix: List[K]): Seq[PrefixTree[K, V]] = {
     prefix match {
       case Nil =>
-        this
+        Seq(this)
       case head :: tail =>
-        children.get(head) match {
-          case Some(value) =>
-            value.findSubtreeOrRoot(tail)
-          case None =>
-            this
-        }
+
+        val exact = children.get(PathElement.Value(head))
+        val wildcard = children.get(PathElement.Wildcard)
+        (exact.toSeq ++ wildcard.toSeq).flatMap(_.findSubtrees(tail))
     }
   }
 
@@ -30,7 +22,13 @@ case class PrefixTree[K, V](values: Seq[V], children: Map[K, PrefixTree[K, V]]) 
 }
 
 object PrefixTree {
-  def build[P, V](pairs: Seq[(Seq[P], V)]): PrefixTree[P, V] = {
+  sealed trait PathElement[+V]
+  object PathElement {
+    case class Value[V](value: V) extends PathElement[V]
+    case object Wildcard extends PathElement[Nothing]
+  }
+
+  def build[P, V](pairs: Seq[(Seq[Option[P]], V)]): PrefixTree[P, V] = {
     val (currentValues, subValues) = pairs.partition(_._1.isEmpty)
 
     val next = subValues
@@ -42,7 +40,13 @@ object PrefixTree {
       .toSeq
       .map {
         case (k, group) =>
-          k -> build(group.map(_._2))
+          val wk: PathElement[P] = k match {
+            case Some(value) =>
+              PathElement.Value(value)
+            case None =>
+              PathElement.Wildcard
+          }
+          wk -> build(group.map(_._2))
       }
       .toMap
 

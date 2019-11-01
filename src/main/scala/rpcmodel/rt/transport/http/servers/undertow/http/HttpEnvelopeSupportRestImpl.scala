@@ -26,14 +26,21 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO]
     val allMethods = dispatchers.flatMap(_.specs.toSeq)
     val prefixed = allMethods.map {
       case (id, spec) =>
-        (spec.extractor.pathSpec.takeWhile(_.isInstanceOf[IRTPathSegment.Word]).map(_.asInstanceOf[IRTPathSegment.Word].value), (id, spec))
+        val path = spec.extractor.pathSpec.map {
+          case IRTPathSegment.Word(value) =>
+            Some(value)
+          case _: IRTPathSegment.Parameter =>
+            None
+        }
+
+        (path, (id, spec))
     }
 
     PrefixTree.build(prefixed)
   }
 
   def indexesFor(path: String): Seq[(MethodId, IRTRestSpec)] = {
-    prefixes.findSubtree(path.split('/').toList).map(_.subtreeValues).toSeq.flatten
+    prefixes.findSubtrees(path.split('/').toList).flatMap(_.values)
   }
 
   override def makeInput(context: HttpRequestContext): F[ServerTransportError, MethodInput] = {
