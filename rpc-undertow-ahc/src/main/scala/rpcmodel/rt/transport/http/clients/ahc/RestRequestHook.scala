@@ -4,7 +4,7 @@ import java.net.{URI, URLDecoder, URLEncoder}
 
 import io.circe.Json
 import org.asynchttpclient.BoundRequestBuilder
-import rpcmodel.rt.transport.IzEither._
+import izumi.functional.IzEither._
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.http.clients.ahc.MappingError.UnexpectedEmptyRemoval

@@ -45,6 +45,7 @@ lazy val core = (project in file("rpc-model"))
   .settings(
     addCompilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full),
     libraryDependencies += "io.7mind.izumi" %% "fundamentals-bio" % izumi,
+    libraryDependencies += "io.7mind.izumi" %% "fundamentals-functional" % izumi,
     libraryDependencies += "io.7mind.izumi" %% "fundamentals-platform" % izumi,
   )
 
