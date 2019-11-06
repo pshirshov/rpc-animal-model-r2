@@ -4,8 +4,8 @@ import io.circe.{Decoder, Encoder, Json}
 import izumi.functional.bio.{BIO, BIOMonadError, BIOPanic}
 import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
-import rpcmodel.rt.transport.codecs.IRTCodec
-import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
+import rpcmodel.rt.codecs.IRTCodec
+import rpcmodel.rt.codecs.IRTCodec.IRTCodecFailure
 import rpcmodel.rt.transport.dispatch._
 import rpcmodel.rt.transport.dispatch.client.{ClientTransport, GeneratedClientBase}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._

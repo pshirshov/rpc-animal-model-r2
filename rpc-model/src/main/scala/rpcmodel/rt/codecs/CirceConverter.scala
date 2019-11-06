@@ -1,7 +1,7 @@
-package rpcmodel.rt.transport.codecs
+package rpcmodel.rt.codecs
 
 import io.circe.{Json, Printer}
-import rpcmodel.rt.transport.codecs.IRTCodec.IRTCodecFailure
+import rpcmodel.rt.codecs.IRTCodec.IRTCodecFailure
 
 trait CirceConverter {
   def printer: Printer

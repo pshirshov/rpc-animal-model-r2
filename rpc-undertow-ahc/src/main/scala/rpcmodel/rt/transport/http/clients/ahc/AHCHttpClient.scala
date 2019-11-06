@@ -7,7 +7,7 @@ import io.circe.{Decoder, Json, Printer}
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.BIOAsync
 import org.asynchttpclient.{AsyncHttpClient, BoundRequestBuilder, Response}
-import rpcmodel.rt.transport.codecs.IRTCodec
+import rpcmodel.rt.codecs.IRTCodec
 import rpcmodel.rt.transport.dispatch.RPCResult
 import rpcmodel.rt.transport.dispatch.client.{ClientRequestHook, ClientTransport}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase

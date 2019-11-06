@@ -1,7 +1,7 @@
 package rpcmodel.rt.transport.dispatch.client
 
 import izumi.functional.bio.BIOError
-import rpcmodel.rt.transport.codecs.IRTCodec
+import rpcmodel.rt.codecs.IRTCodec
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.errors.ClientDispatcherError.ClientCodecFailure
