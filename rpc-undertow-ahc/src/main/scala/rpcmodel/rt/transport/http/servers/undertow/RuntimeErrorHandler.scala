@@ -4,11 +4,19 @@ import io.undertow.server.HttpServerExchange
 import io.undertow.websockets.core.BufferedTextMessage
 import izumi.functional.bio.BIOExit
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsConnection
+import izumi.fundamentals.platform.language.Quirks._
+
 
 trait RuntimeErrorHandler[-T] {
-  def onCritical(context: RuntimeErrorHandler.Context, value: List[Throwable]): Unit = {}
-  def onInfo(context: RuntimeErrorHandler.Context, value: List[Throwable]): Unit = {}
-  def onDomain(context: RuntimeErrorHandler.Context, value: T): Unit = {}
+  def onCritical(context: RuntimeErrorHandler.Context, value: List[Throwable]): Unit = {
+    (context, value).discard()
+  }
+  def onInfo(context: RuntimeErrorHandler.Context, value: List[Throwable]): Unit = {
+    (context, value).discard()
+  }
+  def onDomain(context: RuntimeErrorHandler.Context, value: T): Unit = {
+    (context, value).discard()
+  }
 
   final def handle(context: RuntimeErrorHandler.Context)(f: BIOExit[T, _]): Unit = {
     f match {

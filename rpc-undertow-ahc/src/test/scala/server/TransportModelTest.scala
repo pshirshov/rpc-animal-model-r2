@@ -4,6 +4,8 @@ import io.circe._
 import org.scalatest.WordSpec
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
+import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError
+import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError.ShortException
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.ClientDispatcherError
@@ -33,7 +35,8 @@ class TransportModelTest extends WordSpec {
 
         override def dispatch(c: C2SOutgoingCtx, methodId: GeneratedServerBase.MethodId, body: Json): IO[ClientDispatcherError, GeneratedServerBase.ClientResponse[Json]] = {
           for {
-            out <- serverDispatcher.dispatch(methodId, ServerWireRequest(IncomingServerCtx("0.1.2.3", Map("header" -> Seq("value"))), body)).catchAll(sde => IO.fail(ServerError(???)))
+            out <- serverDispatcher.dispatch(methodId, ServerWireRequest(IncomingServerCtx("0.1.2.3", Map("header" -> Seq("value"))), body))
+              .catchAll(sde => IO.fail(ServerError(RemoteError.Critical(Seq(ShortException("???", s"something is wrong: $sde"))))))
           } yield {
             ClientResponse(out.value)
           }

@@ -61,8 +61,8 @@ class RestRequestHook[F[+ _, + _], RC]
             .biAggregate
 
         } yield {
-          val leave = value.toMap.removedAll(nextGroups.map(_._1))
-          Json.fromFields((next ++ leave).toMap.removedAll(toRemove.map(_.head)))
+          val leave = value.toMap -- nextGroups.map(_._1)
+          Json.fromFields((next ++ leave).toMap -- toRemove.map(_.head))
         }
 
       case None =>

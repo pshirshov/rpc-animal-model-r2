@@ -1,17 +1,16 @@
-package server
+package izumi.fundamentals.collections
 
 import org.scalatest.WordSpec
-import rpcmodel.rt.transport.http.servers.undertow.http.PrefixTree
 
 
-class PrefixTreeTest extends WordSpec {
-  def call[K, V](tree: PrefixTree[K, V], path: K*): Set[V] = {
+class WildcardPrefixTreeTest extends WordSpec {
+  def call[K, V](tree: WildcardPrefixTree[K, V], path: K*): Set[V] = {
     tree.findSubtrees(path.toList).flatMap(_.subtreeValues).toSet
   }
 
   "prefix tree" should {
     "support prefix search" in {
-      val tree = PrefixTree.build(Seq(
+      val tree = WildcardPrefixTree.build(Seq(
         (Seq(Some("a"), Some("b"), Some("c")), 1),
         (Seq(Some("a"), Some("b")), 2),
         (Seq(Some("a"), Some("b"), Some("d")), 3),
@@ -29,7 +28,7 @@ class PrefixTreeTest extends WordSpec {
     }
 
     "support wildcards search" in {
-      val tree = PrefixTree.build(Seq(
+      val tree = WildcardPrefixTree.build(Seq(
         (Seq(Some("a"), None, Some("c")), 1),
         (Seq(Some("a"), None, Some("d")), 3),
         (Seq(Some("a"), Some("b")), 2),

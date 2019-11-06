@@ -6,6 +6,7 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.ServerDispatcherError.{MethodHandlerMissing, ServerCodecFailure}
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerDispatcherError}
 import rpcmodel.rt.transport.rest.IRTRestSpec
+import izumi.fundamentals.platform.language.Quirks._
 
 trait GeneratedServerBase[+F[_, _], -C, WValue] extends ServerContext[F, C, WValue] {
   def id: ServiceName
@@ -39,6 +40,8 @@ abstract class GeneratedServerBaseImpl[F[+ _, + _] : BIOError, C, WValue] extend
       resBody: ResBody,
       kind: ResponseKind,
     ): F[ServerDispatcherError, ServerWireResponse[WValue]] = {
+    (r, reqBody).discard()
+
     val codec = implicitly[IRTCodec[ResBody, WValue]]
     for {
       out <- F.pure(codec.encode(resBody))

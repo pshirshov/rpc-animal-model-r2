@@ -1,10 +1,11 @@
-package rpcmodel.rt.transport.http.servers.undertow.http
+package izumi.fundamentals.collections
 
-import rpcmodel.rt.transport.http.servers.undertow.http.PrefixTree.PathElement
+import izumi.fundamentals.collections
+import izumi.fundamentals.collections.WildcardPrefixTree.PathElement
 
 
-case class PrefixTree[K, V](values: Seq[V], children: Map[PathElement[K], PrefixTree[K, V]]) {
-  def findSubtrees(prefix: List[K]): Seq[PrefixTree[K, V]] = {
+case class WildcardPrefixTree[K, V](values: Seq[V], children: Map[PathElement[K], WildcardPrefixTree[K, V]]) {
+  def findSubtrees(prefix: List[K]): Seq[WildcardPrefixTree[K, V]] = {
     prefix match {
       case Nil =>
         Seq(this)
@@ -20,20 +21,22 @@ case class PrefixTree[K, V](values: Seq[V], children: Map[PathElement[K], Prefix
   }
 }
 
-object PrefixTree {
+object WildcardPrefixTree {
   sealed trait PathElement[+V]
   object PathElement {
     case class Value[V](value: V) extends PathElement[V]
     case object Wildcard extends PathElement[Nothing]
   }
 
-  def build[P, V](pairs: Seq[(Seq[Option[P]], V)]): PrefixTree[P, V] = {
+  def build[P, V](pairs: Seq[(Seq[Option[P]], V)]): WildcardPrefixTree[P, V] = {
     val (currentValues, subValues) = pairs.partition(_._1.isEmpty)
 
     val next = subValues
       .map {
         case (k :: tail, v) =>
           (k, (tail, v))
+        case o =>
+          throw new RuntimeException(s"Impossible case: unexpected state: $o")
       }
       .groupBy(_._1)
       .toSeq
@@ -49,6 +52,6 @@ object PrefixTree {
       }
       .toMap
 
-    PrefixTree(currentValues.map(_._2), next)
+    collections.WildcardPrefixTree(currentValues.map(_._2), next)
   }
 }

@@ -3,6 +3,7 @@ package rpcmodel.rt.transport.http.servers.undertow.http
 import io.circe.Json
 import izumi.functional.bio.BIO
 import izumi.functional.bio.BIO._
+import izumi.fundamentals.collections.WildcardPrefixTree
 import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, MethodIdExtractor}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
 import rpcmodel.rt.transport.errors.ServerTransportError
@@ -23,7 +24,7 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO]
   errHandler: RuntimeErrorHandler[Nothing],
 ) extends HttpEnvelopeSupport[F] {
 
-  lazy val prefixes: PrefixTree[String, (MethodId, IRTRestSpec)] = {
+  lazy val prefixes: WildcardPrefixTree[String, (MethodId, IRTRestSpec)] = {
     val allMethods = dispatchers.flatMap(_.specs.toSeq)
     val prefixed = allMethods.map {
       case (id, spec) =>
@@ -37,7 +38,7 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO]
         (path, (id, spec))
     }
 
-    PrefixTree.build(prefixed)
+    WildcardPrefixTree.build(prefixed)
   }
 
   def indexesFor(path: String): Seq[(MethodId, IRTRestSpec)] = {

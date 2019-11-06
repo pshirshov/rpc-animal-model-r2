@@ -21,6 +21,8 @@ abstract class BasicTransportErrorHandler[-DomainError, -Ctx] extends TransportE
 
           case p: ServerTransportError.Predefined =>
             val reason = p match {
+              case f: ServerTransportError.UnknownRequest =>
+                Map("reason" -> Json.fromString(s"Got response for request which is unknown: ${f.s}"))
               case f: ServerTransportError.DispatcherError =>
                 f.e match {
                   case f1: ServerDispatcherError.MethodHandlerMissing =>
