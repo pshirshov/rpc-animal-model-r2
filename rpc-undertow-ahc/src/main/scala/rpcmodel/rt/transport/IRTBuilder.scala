@@ -141,7 +141,7 @@ final case class IRTBuilder[+F[+ _, + _], -RequestContext]
      handler: TransportErrorHandler[Err, WsConnection] = null,
    ): WebsocketServerHandler[F2, Meta, Ctx, Err] = {
 
-    val clock = mono.Clock.fromImpure(this.clock.getOrElse(new mono.Clock.Standard))
+    val clock = mono.Clock.fromImpure(this.clock.getOrElse(mono.Clock.Standard))
     val entropy = this.entropy.getOrElse(Entropy.Standard)
     val errHandler0 = Option(errHandler).orElse(defaultRuntimeErrHandler).getOrElse(RuntimeErrorHandler.print)
     val handler0 = Option(handler).orElse(defaultTransportErrHandler).getOrElse(BasicTransportErrorHandler.withoutDomain)
