@@ -43,14 +43,15 @@ val izumi = "0.9.10"
 
 lazy val core = (project in file("rpc-model"))
   .settings(
-    addCompilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
-  )
-
-lazy val util = (project in file("rpc-undertow-ahc"))
-  .settings(
     addCompilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full),
     libraryDependencies += "io.7mind.izumi" %% "fundamentals-bio" % izumi,
     libraryDependencies += "io.7mind.izumi" %% "fundamentals-platform" % izumi,
+  )
+
+lazy val util = (project in file("rpc-undertow-ahc"))
+  .dependsOn(core)
+  .settings(
+    addCompilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full),
     libraryDependencies += "dev.zio" %% "zio" % "1.0.0-RC15",
     libraryDependencies += "org.asynchttpclient" % "async-http-client" % "2.10.4",
     libraryDependencies ++= Seq(

@@ -7,8 +7,7 @@ import org.asynchttpclient.BoundRequestBuilder
 import rpcmodel.rt.transport.IzEither._
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
 import rpcmodel.rt.transport.errors.ClientDispatcherError
-import rpcmodel.rt.transport.http.clients.ahc.RestRequestHook.MappingError
-import rpcmodel.rt.transport.http.clients.ahc.RestRequestHook.MappingError.UnexpectedEmptyRemoval
+import rpcmodel.rt.transport.http.clients.ahc.MappingError.UnexpectedEmptyRemoval
 import rpcmodel.rt.transport.rest.IRTRestSpec
 import rpcmodel.rt.transport.rest.IRTRestSpec.IRTPathSegment
 import rpcmodel.rt.transport.rest.RestSpec.{HttpMethod, OnWireGenericType}
@@ -281,18 +280,3 @@ class RestRequestHook[F[+ _, + _], RC]
   }
 }
 
-object RestRequestHook {
-
-  sealed trait MappingError
-
-  object MappingError {
-
-    case class ObjectExpected(currentPath: List[String], baseJson: Json) extends MappingError
-    case class ArrayExpected(currentPath: List[String], baseJson: Json) extends MappingError
-    case class ElementExpected(currentPath: List[String], baseJson: Json, name: String) extends MappingError
-    case class UnexpectedEmptyRemoval(body: Json, removals: Seq[List[String]]) extends MappingError
-    case class UnexpectedNonScalarEntity(currentPath: List[String], baseJson: Json, json: Json) extends MappingError
-
-  }
-
-}
