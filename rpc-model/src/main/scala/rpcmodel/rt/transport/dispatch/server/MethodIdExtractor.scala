@@ -1,4 +1,4 @@
-package rpcmodel.rt.transport.http.servers.shared
+package rpcmodel.rt.transport.dispatch.server
 
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, MethodName, ServiceName}
 import rpcmodel.rt.transport.errors.ServerTransportError

@@ -8,9 +8,8 @@ import izumi.functional.bio.{BIOAsync, BIORunner, Clock2}
 import izumi.functional.mono.Entropy
 import izumi.fundamentals.platform.functional.Identity
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl}
+import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, GeneratedServerBaseImpl, TransportErrorHandler}
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.shared.TransportErrorHandler
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
 import rpcmodel.rt.transport.http.servers.undertow.ws.{SessionManager, SessionManagerImpl, SessionMetaProvider, WebsocketSession}
 

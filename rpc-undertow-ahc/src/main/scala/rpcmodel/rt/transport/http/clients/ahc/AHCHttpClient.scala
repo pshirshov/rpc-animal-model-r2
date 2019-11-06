@@ -9,12 +9,12 @@ import izumi.functional.bio.BIOAsync
 import org.asynchttpclient.{AsyncHttpClient, BoundRequestBuilder, Response}
 import rpcmodel.rt.transport.codecs.IRTCodec
 import rpcmodel.rt.transport.dispatch.RPCResult
-import rpcmodel.rt.transport.dispatch.client.ClientTransport
+import rpcmodel.rt.transport.dispatch.client.{ClientRequestHook, ClientTransport}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.errors.ClientDispatcherError.ClientCodecFailure
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
+import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError
 import rpcmodel.rt.transport.http.servers.undertow.HttpServerHandler
 
 trait BaseClientContext[RequestContext] {

@@ -1,8 +1,8 @@
-package rpcmodel.rt.transport.http.servers.shared
+package rpcmodel.rt.transport.dispatch.server
 
 import io.circe.Json
+import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ServerWireResponse
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
 
 sealed trait TransportResponse
 

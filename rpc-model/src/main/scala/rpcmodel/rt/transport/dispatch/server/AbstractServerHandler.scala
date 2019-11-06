@@ -1,8 +1,7 @@
-package rpcmodel.rt.transport.http.servers.shared
+package rpcmodel.rt.transport.dispatch.server
 
 import izumi.functional.bio.BIOAsync
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, ServerWireRequest, ServerWireResponse}
 import rpcmodel.rt.transport.errors.ServerTransportError
 

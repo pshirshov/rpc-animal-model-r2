@@ -10,13 +10,12 @@ import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIOPrimitives, BIORunner, Entropy2}
 import org.asynchttpclient.AsyncHttpClient
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.client.ClientTransport
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import rpcmodel.rt.transport.dispatch.client.{ClientRequestHook, ClientTransport}
+import rpcmodel.rt.transport.dispatch.server.{AbstractServerHandler, GeneratedServerBase, InvokationId, PollingConfig, TransportErrorHandler}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.{ClientDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
-import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, InvokationId, PollingConfig, TransportErrorHandler}
+import rpcmodel.rt.transport.dispatch.server.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
+import rpcmodel.rt.transport.dispatch.server.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler
 import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler.Context.WebsocketClientSession
 import rpcmodel.rt.transport.http.servers.undertow.ws.IdentifiedRequestContext

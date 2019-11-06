@@ -9,6 +9,7 @@ import rpcmodel.generated.ICalc.ZeroDivisionError
 import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.IRTBuilder
 import rpcmodel.rt.transport.dispatch.ContextProvider
+import rpcmodel.rt.transport.dispatch.client.ClientRequestHook
 import rpcmodel.rt.transport.http.clients.ahc._
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext

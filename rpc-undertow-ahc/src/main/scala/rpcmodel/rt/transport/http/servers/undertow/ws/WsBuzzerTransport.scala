@@ -3,13 +3,12 @@ package rpcmodel.rt.transport.http.servers.undertow.ws
 import io.circe.{Json, Printer}
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIOPrimitives, Entropy2}
-import rpcmodel.rt.transport.dispatch.client.ClientTransport
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import rpcmodel.rt.transport.dispatch.client.{ClientRequestHook, ClientTransport}
+import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, InvokationId, PollingConfig}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.ClientResponse
 import rpcmodel.rt.transport.errors.ClientDispatcherError
-import rpcmodel.rt.transport.http.clients.ahc.{BaseClientContext, ClientRequestHook}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
-import rpcmodel.rt.transport.http.servers.shared.{InvokationId, PollingConfig}
+import rpcmodel.rt.transport.http.clients.ahc.BaseClientContext
+import rpcmodel.rt.transport.dispatch.server.Envelopes.{AsyncRequest, AsyncResponse}
 
 case class IdentifiedRequestContext[RequestContext](
                                                      rc: RequestContext,

@@ -1,4 +1,4 @@
-package rpcmodel.rt.transport.http.servers.shared
+package rpcmodel.rt.transport.dispatch.server
 
 import java.time.LocalDateTime
 import java.util.UUID
@@ -6,8 +6,8 @@ import java.util.UUID
 import io.circe._
 import io.circe.derivation.deriveCodec
 import izumi.fundamentals.platform.language.Quirks._
+import rpcmodel.rt.transport.dispatch.server.Envelopes.AsyncResponse
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, MethodName, ServiceName}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse
 
 import scala.concurrent.duration.FiniteDuration
 

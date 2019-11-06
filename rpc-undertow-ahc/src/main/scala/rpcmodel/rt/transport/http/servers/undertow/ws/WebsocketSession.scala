@@ -12,11 +12,10 @@ import izumi.functional.bio.{BIOAsync, BIORunner, Clock2}
 import izumi.functional.mono.Entropy
 import izumi.fundamentals.platform.functional.Identity
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import rpcmodel.rt.transport.dispatch.server.{AbstractServerHandler, GeneratedServerBase, InvokationId, PendingResponse, TransportErrorHandler, WsSessionId}
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.{AsyncRequest, AsyncResponse}
-import rpcmodel.rt.transport.http.servers.shared._
+import rpcmodel.rt.transport.dispatch.server.Envelopes.AsyncResponse.{AsyncFailure, AsyncSuccess}
+import rpcmodel.rt.transport.dispatch.server.Envelopes.{AsyncRequest, AsyncResponse}
 import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}
 

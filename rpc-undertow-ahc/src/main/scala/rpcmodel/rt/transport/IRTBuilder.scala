@@ -11,11 +11,11 @@ import izumi.fundamentals.platform.functional.Identity
 import org.asynchttpclient.Dsl.asyncHttpClient
 import org.asynchttpclient.{AsyncHttpClient, BoundRequestBuilder}
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import rpcmodel.rt.transport.dispatch.client.ClientRequestHook
+import rpcmodel.rt.transport.dispatch.server.{BasicTransportErrorHandler, GeneratedServerBase, MethodIdExtractor, PollingConfig, TransportErrorHandler}
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.clients.ahc.{AHCClientContext, AHCHttpClient, AHCWebsocketClient, ClientRequestHook}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncRequest
-import rpcmodel.rt.transport.http.servers.shared.{BasicTransportErrorHandler, MethodIdExtractor, PollingConfig, TransportErrorHandler}
+import rpcmodel.rt.transport.http.clients.ahc.{AHCClientContext, AHCHttpClient, AHCWebsocketClient}
+import rpcmodel.rt.transport.dispatch.server.Envelopes.AsyncRequest
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.http.{HttpEnvelopeSupport, HttpEnvelopeSupportDefaultImpl, HttpEnvelopeSupportRestImpl}
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.{WsConnection, WsServerInRequestContext}

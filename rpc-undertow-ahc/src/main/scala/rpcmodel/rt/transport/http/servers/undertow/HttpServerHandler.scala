@@ -11,12 +11,11 @@ import io.undertow.util.{Headers, HttpString, Methods}
 import izumi.functional.bio.BIO._
 import izumi.functional.bio.{BIOAsync, BIORunner}
 import rpcmodel.rt.transport.dispatch.ContextProvider
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import rpcmodel.rt.transport.dispatch.server.{AbstractServerHandler, GeneratedServerBase, TransportErrorHandler, TransportResponse}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, ResponseKind, ServerWireResponse}
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError.ShortException
-import rpcmodel.rt.transport.http.servers.shared.{AbstractServerHandler, TransportErrorHandler, TransportResponse}
+import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError
+import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError.ShortException
 import rpcmodel.rt.transport.http.servers.undertow.http.HttpEnvelopeSupport
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 

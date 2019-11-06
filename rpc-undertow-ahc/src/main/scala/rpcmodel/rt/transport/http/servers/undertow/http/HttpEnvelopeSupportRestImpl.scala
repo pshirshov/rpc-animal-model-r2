@@ -3,11 +3,10 @@ package rpcmodel.rt.transport.http.servers.undertow.http
 import io.circe.Json
 import izumi.functional.bio.BIO
 import izumi.functional.bio.BIO._
-import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
+import rpcmodel.rt.transport.dispatch.server.{GeneratedServerBase, MethodIdExtractor}
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
 import rpcmodel.rt.transport.errors.ServerTransportError
 import rpcmodel.rt.transport.http.clients.ahc.Escaping
-import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
 import rpcmodel.rt.transport.http.servers.undertow.RuntimeErrorHandler.Context.RestMappingSupport
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.{MethodInput, RuntimeErrorHandler}

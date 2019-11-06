@@ -5,9 +5,10 @@ import java.net.{URI, URLDecoder, URLEncoder}
 import io.circe.Json
 import org.asynchttpclient.BoundRequestBuilder
 import izumi.functional.IzEither._
+import rpcmodel.rt.transport.dispatch.client.ClientRequestHook
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.MethodId
-import rpcmodel.rt.transport.errors.ClientDispatcherError
-import rpcmodel.rt.transport.http.clients.ahc.MappingError.UnexpectedEmptyRemoval
+import rpcmodel.rt.transport.errors.MappingError.UnexpectedEmptyRemoval
+import rpcmodel.rt.transport.errors.{ClientDispatcherError, MappingError}
 import rpcmodel.rt.transport.rest.IRTRestSpec
 import rpcmodel.rt.transport.rest.IRTRestSpec.IRTPathSegment
 import rpcmodel.rt.transport.rest.RestSpec.{HttpMethod, OnWireGenericType}

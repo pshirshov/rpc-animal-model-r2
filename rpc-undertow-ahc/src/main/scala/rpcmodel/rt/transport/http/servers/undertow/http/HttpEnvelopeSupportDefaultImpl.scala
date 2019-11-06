@@ -2,8 +2,8 @@ package rpcmodel.rt.transport.http.servers.undertow.http
 
 import izumi.functional.bio.BIO
 import izumi.functional.bio.BIO._
+import rpcmodel.rt.transport.dispatch.server.MethodIdExtractor
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.shared.MethodIdExtractor
 import rpcmodel.rt.transport.http.servers.undertow.MethodInput
 import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 

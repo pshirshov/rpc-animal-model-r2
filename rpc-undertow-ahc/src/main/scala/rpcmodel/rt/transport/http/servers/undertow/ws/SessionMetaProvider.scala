@@ -1,6 +1,6 @@
 package rpcmodel.rt.transport.http.servers.undertow.ws
 
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.AsyncRequest
+import rpcmodel.rt.transport.dispatch.server.Envelopes.AsyncRequest
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsConnection
 
 trait SessionMetaProvider[Meta] {

@@ -1,10 +1,10 @@
-package rpcmodel.rt.transport.http.servers.shared
+package rpcmodel.rt.transport.dispatch.server
 
 import io.circe.Json
 import io.circe.syntax._
+import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError
+import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError.ShortException
 import rpcmodel.rt.transport.errors.{ServerDispatcherError, ServerTransportError}
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError.ShortException
 
 abstract class BasicTransportErrorHandler[-DomainError, -Ctx] extends TransportErrorHandler[DomainError, Ctx] {
   // TODO: withTraces = true

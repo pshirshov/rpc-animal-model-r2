@@ -1,6 +1,6 @@
 package rpcmodel.rt.transport.http.servers.undertow.ws
 
-import rpcmodel.rt.transport.http.servers.shared.WsSessionId
+import rpcmodel.rt.transport.dispatch.server.WsSessionId
 
 trait SessionManager[F[+ _, + _], Meta] {
   def register(value: WebsocketSession[F, Meta, _, _]): Unit

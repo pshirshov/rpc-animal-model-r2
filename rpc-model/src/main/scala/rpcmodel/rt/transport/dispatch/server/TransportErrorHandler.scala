@@ -1,7 +1,7 @@
-package rpcmodel.rt.transport.http.servers.shared
+package rpcmodel.rt.transport.dispatch.server
 
+import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError
 import rpcmodel.rt.transport.errors.ServerTransportError
-import rpcmodel.rt.transport.http.servers.shared.Envelopes.RemoteError
 
 trait TransportErrorHandler[-DomainError, -Ctx] {
   def toRemote(ctx: Ctx)(err: Either[List[Throwable], ServerTransportError]): RemoteError

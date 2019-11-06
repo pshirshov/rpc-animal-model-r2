@@ -2,9 +2,9 @@ package rpcmodel.rt.transport.http.servers.undertow.ws
 
 import java.util.concurrent.ConcurrentHashMap
 
-import rpcmodel.rt.transport.http.servers.shared.WsSessionId
-
 import izumi.fundamentals.platform.language.Quirks._
+import rpcmodel.rt.transport.dispatch.server.WsSessionId
+
 import scala.collection.JavaConverters._
 
 protected[undertow] final class SessionManagerImpl[F[+ _, + _], Meta] extends SessionManager[F, Meta] {
