@@ -22,21 +22,24 @@ case class WildcardPrefixTree[K, V](values: Seq[V], children: Map[PathElement[K]
 }
 
 object WildcardPrefixTree {
+
   sealed trait PathElement[+V]
+
   object PathElement {
+
     case class Value[V](value: V) extends PathElement[V]
+
     case object Wildcard extends PathElement[Nothing]
+
   }
 
   def build[P, V](pairs: Seq[(Seq[Option[P]], V)]): WildcardPrefixTree[P, V] = {
     val (currentValues, subValues) = pairs.partition(_._1.isEmpty)
 
     val next = subValues
-      .map {
+      .collect {
         case (k :: tail, v) =>
           (k, (tail, v))
-        case o =>
-          throw new RuntimeException(s"Impossible case: unexpected state: $o")
       }
       .groupBy(_._1)
       .toSeq
