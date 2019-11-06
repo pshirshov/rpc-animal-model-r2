@@ -5,7 +5,10 @@ name := "rpc-model-r2"
 
 
 
-libraryDependencies in ThisBuild += "org.scala-lang.modules" %% "scala-java8-compat" % "0.9.0"
+libraryDependencies in ThisBuild ++= Seq(
+  "org.scala-lang.modules" %% "scala-java8-compat" % "0.9.0",
+  "org.scala-lang.modules" %% "scala-collection-compat" % "2.1.2",
+)
 version in ThisBuild := "0.1"
 
 

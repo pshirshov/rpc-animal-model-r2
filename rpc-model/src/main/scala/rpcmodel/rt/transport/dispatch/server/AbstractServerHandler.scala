@@ -4,6 +4,7 @@ import izumi.functional.bio.BIOAsync
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase.{MethodId, ServerWireRequest, ServerWireResponse}
 import rpcmodel.rt.transport.errors.ServerTransportError
+import scala.collection.compat._
 
 trait AbstractServerHandler[F[+ _, + _], TransportContext, ServerTransportContext, WireBody] {
 
@@ -16,6 +17,7 @@ trait AbstractServerHandler[F[+ _, + _], TransportContext, ServerTransportContex
 
   private lazy val methods = dispatchers
     .groupBy(_.id)
+    .view
     .mapValues {
       d =>
         if (d.size > 1) {

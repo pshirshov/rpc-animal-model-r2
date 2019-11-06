@@ -8,7 +8,7 @@ case class HttpRequestContext(
                                body: HttpBody,
                              ) {
 
-  import scala.collection.JavaConverters._
+  import scala.jdk.CollectionConverters._
 
   def headers: Map[String, Seq[String]] = {
     val nativeHeaders = exchange.getRequestHeaders

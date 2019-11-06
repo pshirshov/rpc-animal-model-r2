@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 import izumi.fundamentals.platform.language.Quirks._
 import rpcmodel.rt.transport.dispatch.server.WsSessionId
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 protected[undertow] final class SessionManagerImpl[F[+ _, + _], Meta] extends SessionManager[F, Meta] {
   private val sessions = new ConcurrentHashMap[WsSessionId, WebsocketSession[F, Meta, _, _]]

@@ -91,7 +91,7 @@ class HttpEnvelopeSupportRestImpl[F[+ _, + _] : BIO]
             }
         }
 
-      import scala.collection.JavaConverters._
+      import scala.jdk.CollectionConverters._
 
       val mappedParams = spec.extractor.queryParameters.toSeq.map {
         case (name, d) =>

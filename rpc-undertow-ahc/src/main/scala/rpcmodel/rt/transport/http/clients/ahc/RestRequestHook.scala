@@ -12,6 +12,8 @@ import rpcmodel.rt.transport.errors.{ClientDispatcherError, MappingError}
 import rpcmodel.rt.transport.rest.IRTRestSpec
 import rpcmodel.rt.transport.rest.IRTRestSpec.IRTPathSegment
 import rpcmodel.rt.transport.rest.RestSpec.{HttpMethod, OnWireGenericType}
+import scala.jdk.CollectionConverters._
+import scala.collection.compat._
 
 object Escaping {
   @inline final def escape(s: String): String = URLEncoder.encode(s, "UTF-8")
@@ -48,6 +50,7 @@ class RestRequestHook[F[+ _, + _], RC]
             }.biAggregate
           next <- nextGroups
             .groupBy(_._1)
+            .view
             .mapValues(_.map(_._2))
             .toSeq
             .flatMap {
@@ -146,7 +149,6 @@ class RestRequestHook[F[+ _, + _], RC]
       .biAggregate
       .map(_.toMap)
 
-    import scala.collection.JavaConverters._
 
     for {
       parameters <- params
@@ -166,7 +168,7 @@ class RestRequestHook[F[+ _, + _], RC]
 
       println(s"transformed: ${c.body} => ${value.method.name}, $newPath, $params, $newbody")
       val base = c.client.prepare(value.method.name.toUpperCase, url.toString)
-        .setQueryParams(parameters.mapValues(_.asJava).toMap.asJava)
+        .setQueryParams(parameters.view.mapValues(_.asJava).toMap.asJava)
 
       value.method match {
         case HttpMethod.Get =>
