@@ -1,9 +1,9 @@
-package rpcmodel.generated
+package server.fixtures.generated
 
 import io.circe.{Decoder, Encoder, Json}
 import izumi.functional.bio.{BIO, BIOMonadError, BIOPanic}
-import rpcmodel.generated.ICalc.ZeroDivisionError
-import rpcmodel.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
+import server.fixtures.generated.ICalc.ZeroDivisionError
+import server.fixtures.generated.ICalcServerWrappedImpl.{DivInput, DivOutput, SumInput, SumOutput}
 import rpcmodel.rt.codecs.IRTCodec
 import rpcmodel.rt.codecs.IRTCodec.IRTCodecFailure
 import rpcmodel.rt.transport.dispatch._

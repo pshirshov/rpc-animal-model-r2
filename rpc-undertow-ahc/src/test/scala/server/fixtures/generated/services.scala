@@ -1,4 +1,4 @@
-package rpcmodel.generated
+package server.fixtures.generated
 
 
 

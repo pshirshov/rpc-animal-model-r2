@@ -5,8 +5,8 @@ import io.undertow.{Handlers, Undertow}
 import izumi.functional.bio._
 import org.asynchttpclient.BoundRequestBuilder
 import org.scalatest.WordSpec
-import rpcmodel.generated.ICalc.ZeroDivisionError
-import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
+import server.fixtures.generated.ICalc.ZeroDivisionError
+import server.fixtures.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.IRTBuilder
 import rpcmodel.rt.transport.dispatch.ContextProvider
 import rpcmodel.rt.transport.dispatch.client.ClientRequestHook
@@ -15,7 +15,7 @@ import rpcmodel.rt.transport.http.servers.undertow.http.model.HttpRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.model.WsServerInRequestContext
 import rpcmodel.rt.transport.http.servers.undertow.ws.{IdentifiedRequestContext, SessionManager, SessionMetaProvider}
 import rpcmodel.rt.transport.http.servers.undertow.{HttpServerHandler, WebsocketServerHandler}
-import rpcmodel.user.impl.CalcServerImpl
+import server.fixtures.user.impl.CalcServerImpl
 import zio._
 import zio.clock.Clock
 import zio.internal.{Platform, PlatformLive}

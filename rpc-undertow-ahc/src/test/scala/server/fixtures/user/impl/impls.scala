@@ -1,9 +1,9 @@
-package rpcmodel.user.impl
+package server.fixtures.user.impl
 
 import izumi.functional.bio.BIO
 import izumi.functional.bio.BIO._
-import rpcmodel.generated.ICalc
-import rpcmodel.generated.ICalc._
+import server.fixtures.generated.ICalc
+import server.fixtures.generated.ICalc._
 
 
 class CalcServerImpl[F[+ _, + _] : BIO, Ctx] extends ICalc.Interface[F, Ctx] {

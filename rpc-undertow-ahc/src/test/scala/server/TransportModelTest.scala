@@ -2,7 +2,7 @@ package server
 
 import io.circe._
 import org.scalatest.WordSpec
-import rpcmodel.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
+import server.fixtures.generated.{GeneratedCalcClientDispatcher, GeneratedCalcCodecs, GeneratedCalcCodecsCirceJson, GeneratedCalcServerDispatcher}
 import rpcmodel.rt.transport.dispatch.client.ClientTransport
 import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError
 import rpcmodel.rt.transport.dispatch.server.Envelopes.RemoteError.ShortException
@@ -10,7 +10,7 @@ import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase
 import rpcmodel.rt.transport.dispatch.server.GeneratedServerBase._
 import rpcmodel.rt.transport.errors.ClientDispatcherError
 import rpcmodel.rt.transport.errors.ClientDispatcherError.ServerError
-import rpcmodel.user.impl.CalcServerImpl
+import server.fixtures.user.impl.CalcServerImpl
 import zio._
 import zio.internal.{Platform, PlatformLive}
 
